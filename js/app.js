@@ -74,33 +74,85 @@ const applyTempoBtn = document.getElementById('apply-tempo-btn');
 // Initialize Audio Context (on user interaction)
 function initAudioContext() {
     if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        // Load audio samples
+        try {
+            console.log('Creating new audio context');
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('Audio context created with state:', audioContext.state);
+            // Load audio samples
+            loadAudioSamples();
+            return true;
+        } catch (error) {
+            console.error('Failed to create audio context:', error);
+            return false;
+        }
+    } else {
+        console.log('Audio context already exists with state:', audioContext.state);
+        return true;
+    }
+}
+
+// Function to manually force reload audio samples
+function forceReloadAudioSamples() {
+    console.log('Forcing reload of audio samples...');
+    
+    // Reset loaded flag
+    audioSamplesLoaded = false;
+    bassDrumBuffer = null;
+    snareBuffer = null;
+    
+    // Ensure audio context is initialized and resumed
+    if (!audioContext) {
+        const initialized = initAudioContext();
+        if (!initialized) {
+            console.error('Could not initialize audio context for reload');
+            return;
+        }
+    }
+    
+    // Make sure context is running
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            console.log('Audio context resumed for forced reload');
+            loadAudioSamples();
+        });
+    } else {
         loadAudioSamples();
     }
 }
 
 // Load audio samples for the metronome
 function loadAudioSamples() {
-    if (audioSamplesLoaded) return;
+    if (audioSamplesLoaded) {
+        console.log('Audio samples already loaded, skipping');
+        return;
+    }
     
-    console.log('Loading audio samples...');
+    console.log('Attempting to load audio samples...');
     
     // Reset the audio samples loaded flag to ensure both samples are loaded
     audioSamplesLoaded = false;
+    
+    // Log what we're looking for
+    console.log('Fetching from: ' + new URL('./Audio/BassDrum.mp3', window.location.href).href);
+    console.log('Fetching from: ' + new URL('./Audio/Snare.wav', window.location.href).href);
     
     // Create promises for loading both samples
     const loadBassDrum = fetch('./Audio/BassDrum.mp3')
         .then(response => {
             if (!response.ok) {
+                console.error(`Failed to load BassDrum.mp3: ${response.status} ${response.statusText}`);
                 throw new Error(`Failed to load BassDrum.mp3: ${response.status} ${response.statusText}`);
             }
+            console.log('BassDrum.mp3 fetch successful');
             return response.arrayBuffer();
         })
-        .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+        .then(arrayBuffer => {
+            console.log('BassDrum.mp3 buffer received, size:', arrayBuffer.byteLength);
+            return audioContext.decodeAudioData(arrayBuffer);
+        })
         .then(audioBuffer => {
+            console.log('BassDrum.mp3 decoded successfully');
             bassDrumBuffer = audioBuffer;
-            console.log('Bass drum sample loaded successfully');
             return true;
         })
         .catch(error => {
@@ -111,14 +163,19 @@ function loadAudioSamples() {
     const loadSnare = fetch('./Audio/Snare.wav')
         .then(response => {
             if (!response.ok) {
+                console.error(`Failed to load Snare.wav: ${response.status} ${response.statusText}`);
                 throw new Error(`Failed to load Snare.wav: ${response.status} ${response.statusText}`);
             }
+            console.log('Snare.wav fetch successful');
             return response.arrayBuffer();
         })
-        .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+        .then(arrayBuffer => {
+            console.log('Snare.wav buffer received, size:', arrayBuffer.byteLength);
+            return audioContext.decodeAudioData(arrayBuffer);
+        })
         .then(audioBuffer => {
+            console.log('Snare.wav decoded successfully');
             snareBuffer = audioBuffer;
-            console.log('Snare sample loaded successfully');
             return true;
         })
         .catch(error => {
@@ -132,6 +189,8 @@ function loadAudioSamples() {
             // Both samples loaded successfully if both results are true
             audioSamplesLoaded = results[0] && results[1];
             console.log('Audio samples loaded status:', audioSamplesLoaded);
+            console.log('BassDrum buffer:', bassDrumBuffer ? 'LOADED' : 'NULL');
+            console.log('Snare buffer:', snareBuffer ? 'LOADED' : 'NULL');
             
             if (!audioSamplesLoaded) {
                 console.warn('Some audio samples failed to load, will use fallback sounds');
@@ -141,15 +200,21 @@ function loadAudioSamples() {
 
 // Generate a click sound
 function playClick(time, isAccent) {
-    console.log(`Playing ${isAccent ? 'accented' : 'non-accented'} beat. Samples loaded: ${audioSamplesLoaded}`);
+    // Ensure audio context is running
+    if (audioContext.state !== 'running') {
+        console.log('Audio context not running, attempting to resume');
+        audioContext.resume();
+    }
+    
+    console.log(`Playing ${isAccent ? 'accented' : 'non-accented'} beat. Samples loaded: ${audioSamplesLoaded}, BassDrum: ${bassDrumBuffer ? 'YES' : 'NO'}, Snare: ${snareBuffer ? 'YES' : 'NO'}`);
     
     // Check if samples are loaded AND the specific buffer we need exists
-    const useBassDrum = isAccent && bassDrumBuffer;
-    const useSnare = !isAccent && snareBuffer;
+    const useBassDrum = audioSamplesLoaded && isAccent && bassDrumBuffer;
+    const useSnare = audioSamplesLoaded && !isAccent && snareBuffer;
     
     // Use oscillator as fallback if samples haven't loaded or the needed buffer doesn't exist
-    if (!audioSamplesLoaded || (!useBassDrum && !useSnare)) {
-        console.log('Using fallback oscillator sound');
+    if (!useBassDrum && !useSnare) {
+        console.log('Using fallback oscillator sound, samples not ready');
         // Fallback to oscillator-based sound
         const clickOscillator = audioContext.createOscillator();
         const clickGain = audioContext.createGain();
@@ -485,19 +550,26 @@ function updateIncrementValue() {
 // Start the metronome
 function startMetronome() {
     if (!isPlaying) {
+        console.log('Starting metronome...');
+        
         // Initialize context if needed
         initAudioContext();
         
         // Resume audio context (might be suspended)
         if (audioContext.state === 'suspended') {
+            console.log('Audio context is suspended, resuming...');
             audioContext.resume().then(() => {
                 console.log('Audio context resumed successfully');
                 // Make sure samples are loaded - might have failed the first time
                 if (!audioSamplesLoaded) {
-                    console.log('Retrying audio sample loading...');
+                    console.log('Audio samples not loaded, attempting to load now...');
                     loadAudioSamples();
                 }
+            }).catch(error => {
+                console.error('Failed to resume audio context:', error);
             });
+        } else {
+            console.log('Audio context state:', audioContext.state);
         }
         
         isPlaying = true;
@@ -508,9 +580,6 @@ function startMetronome() {
         document.querySelectorAll('.accent-button').forEach(button => {
             button.classList.remove('active');
         });
-        
-        // No longer pull the handle when clicking start
-        // Just use the current tempo
         
         // Schedule first beat immediately
         scheduleNextBeat();
@@ -1956,6 +2025,69 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('mouseup', handleMinMaxTempoDragEnd);
     document.addEventListener('touchend', handleMinMaxTempoDragEnd);
     document.addEventListener('touchcancel', handleMinMaxTempoDragEnd);
+    
+    // Add a one-time click handler to initialize audio on first interaction
+    const initAudioOnFirstInteraction = () => {
+        console.log('First user interaction detected - initializing audio');
+        initAudioContext();
+        
+        // Try to resume audio context immediately (needed for some browsers)
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('Audio context resumed on first interaction');
+                loadAudioSamples(); // Try loading samples right away
+            });
+        }
+    };
+    
+    // Add the one-time initialization listener to the whole document
+    document.addEventListener('click', initAudioOnFirstInteraction, { once: true });
+    
+    // Add debug status overlay
+    const statusOverlay = document.createElement('div');
+    statusOverlay.className = 'audio-status-overlay';
+    statusOverlay.style.position = 'fixed';
+    statusOverlay.style.bottom = '10px';
+    statusOverlay.style.right = '10px';
+    statusOverlay.style.background = 'rgba(0,0,0,0.7)';
+    statusOverlay.style.color = 'white';
+    statusOverlay.style.padding = '10px';
+    statusOverlay.style.borderRadius = '5px';
+    statusOverlay.style.fontFamily = 'monospace';
+    statusOverlay.style.fontSize = '12px';
+    statusOverlay.style.maxWidth = '300px';
+    statusOverlay.style.zIndex = '9999';
+    
+    // Add reload button
+    const reloadButton = document.createElement('button');
+    reloadButton.textContent = 'Reload Audio';
+    reloadButton.style.marginTop = '10px';
+    reloadButton.style.padding = '5px';
+    
+    reloadButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        forceReloadAudioSamples();
+        
+        // Update status immediately
+        updateStatusOverlay();
+    });
+    
+    // Function to update status display
+    function updateStatusOverlay() {
+        statusOverlay.innerHTML = `
+            <div>Audio Context: ${audioContext ? audioContext.state : 'null'}</div>
+            <div>Samples Loaded: ${audioSamplesLoaded ? 'Yes' : 'No'}</div>
+            <div>BassDrum: ${bassDrumBuffer ? 'Loaded' : 'Not Loaded'}</div>
+            <div>Snare: ${snareBuffer ? 'Loaded' : 'Not Loaded'}</div>
+        `;
+        statusOverlay.appendChild(reloadButton);
+    }
+    
+    // Initial update
+    document.body.appendChild(statusOverlay);
+    
+    // Update status every second
+    setInterval(updateStatusOverlay, 1000);
 });
 
 // Generate all digits for the rollers
