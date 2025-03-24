@@ -17,6 +17,11 @@ let isLimitIncrement = true; // Whether increment mode should be limited by min/
 let isAtMinLimit = false;
 let isAtMaxLimit = false;
 
+// Audio samples
+let bassDrumBuffer = null;
+let snareBuffer = null;
+let audioSamplesLoaded = false;
+
 // For gear interaction
 let isDraggingGear = false;
 let lastY = 0;
@@ -70,25 +75,73 @@ const applyTempoBtn = document.getElementById('apply-tempo-btn');
 function initAudioContext() {
     if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Load audio samples
+        loadAudioSamples();
     }
+}
+
+// Load audio samples for the metronome
+function loadAudioSamples() {
+    if (audioSamplesLoaded) return;
+    
+    // Load bass drum (accented beat)
+    fetch('Audio/BassDrum.mp3')
+        .then(response => response.arrayBuffer())
+        .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+        .then(audioBuffer => {
+            bassDrumBuffer = audioBuffer;
+            console.log('Bass drum sample loaded');
+        })
+        .catch(error => console.error('Error loading bass drum sample:', error));
+    
+    // Load snare (non-accented beat)
+    fetch('Audio/Snare.wav')
+        .then(response => response.arrayBuffer())
+        .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+        .then(audioBuffer => {
+            snareBuffer = audioBuffer;
+            console.log('Snare sample loaded');
+            audioSamplesLoaded = true;
+        })
+        .catch(error => console.error('Error loading snare sample:', error));
 }
 
 // Generate a click sound
 function playClick(time, isAccent) {
-    const clickOscillator = audioContext.createOscillator();
-    const clickGain = audioContext.createGain();
+    // Use oscillator as fallback if samples haven't loaded
+    if (!audioSamplesLoaded || (!bassDrumBuffer && !snareBuffer)) {
+        // Fallback to oscillator-based sound
+        const clickOscillator = audioContext.createOscillator();
+        const clickGain = audioContext.createGain();
+        
+        // Different frequency for accented beat
+        clickOscillator.frequency.value = isAccent ? 1500 : 1000;
+        
+        clickGain.gain.value = 0.3;
+        clickOscillator.connect(clickGain);
+        clickGain.connect(audioContext.destination);
+        
+        clickOscillator.start(time);
+        clickOscillator.stop(time + 0.02);
+        
+        return;
+    }
     
-    // Different frequency for accented beat
-    clickOscillator.frequency.value = isAccent ? 1500 : 1000;
+    // Play the appropriate sample based on whether it's an accented beat
+    const buffer = isAccent ? bassDrumBuffer : snareBuffer;
     
-    clickGain.gain.value = 0.3;
-    clickOscillator.connect(clickGain);
-    clickGain.connect(audioContext.destination);
-    
-    clickOscillator.start(time);
-    clickOscillator.stop(time + 0.02);
-    
-    // Visual feedback is now handled in scheduleNextBeat
+    if (buffer) {
+        const source = audioContext.createBufferSource();
+        const gainNode = audioContext.createGain();
+        
+        source.buffer = buffer;
+        gainNode.gain.value = isAccent ? 0.5 : 0.4; // Different volumes for bass drum and snare
+        
+        source.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        source.start(time);
+    }
 }
 
 // Schedule the next beat
