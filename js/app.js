@@ -36,6 +36,13 @@ let currentDraggedDigit = null;
 let digitDragStartY = 0;
 let digitDragSensitivity = 8; // Pixels to drag before changing digit value
 
+// Add these new variables near the top of the file with other variables
+let isDraggingMinTempo = false;
+let isDraggingMaxTempo = false;
+let minTempoStartY = 0;
+let maxTempoStartY = 0;
+let minMaxDragSensitivity = 5; // Pixels to drag before changing value
+
 // DOM Elements
 const hundredsRoller = document.getElementById('hundreds-roller');
 const tensRoller = document.getElementById('tens-roller');
@@ -1764,6 +1771,44 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('mouseup', handleDigitDragEnd);
     document.addEventListener('touchend', handleDigitDragEnd);
     document.addEventListener('touchcancel', handleDigitDragEnd);
+    
+    // Add min/max tempo drag handlers
+    const minTempoLabel = document.querySelector('label[for="min-tempo"]');
+    const maxTempoLabel = document.querySelector('label[for="max-tempo"]');
+
+    if (minTempoLabel) {
+        minTempoLabel.style.cursor = 'ns-resize';
+        minTempoLabel.addEventListener('mousedown', handleMinTempoDragStart);
+        minTempoLabel.addEventListener('touchstart', handleMinTempoDragStart, { passive: false });
+    }
+
+    if (maxTempoLabel) {
+        maxTempoLabel.style.cursor = 'ns-resize';
+        maxTempoLabel.addEventListener('mousedown', handleMaxTempoDragStart);
+        maxTempoLabel.addEventListener('touchstart', handleMaxTempoDragStart, { passive: false });
+    }
+
+    minTempoInput.style.cursor = 'ns-resize';
+    maxTempoInput.style.cursor = 'ns-resize';
+    
+    minTempoInput.addEventListener('mousedown', handleMinTempoDragStart);
+    maxTempoInput.addEventListener('mousedown', handleMaxTempoDragStart);
+    
+    minTempoInput.addEventListener('touchstart', handleMinTempoDragStart, { passive: false });
+    maxTempoInput.addEventListener('touchstart', handleMaxTempoDragStart, { passive: false });
+    
+    document.addEventListener('mousemove', handleMinMaxTempoDragMove);
+    document.addEventListener('touchmove', (e) => {
+        if ((isDraggingMinTempo || isDraggingMaxTempo) && e.touches.length > 0) {
+            const touch = e.touches[0];
+            const touchEvent = { clientY: touch.clientY, preventDefault: () => e.preventDefault() };
+            handleMinMaxTempoDragMove(touchEvent);
+        }
+    }, { passive: false });
+    
+    document.addEventListener('mouseup', handleMinMaxTempoDragEnd);
+    document.addEventListener('touchend', handleMinMaxTempoDragEnd);
+    document.addEventListener('touchcancel', handleMinMaxTempoDragEnd);
 });
 
 // Generate all digits for the rollers
@@ -2065,4 +2110,111 @@ function handleDigitWheel(e, digitContainer) {
     setTimeout(() => {
         digitContainer.classList.remove('scrolling', 'scroll-up', 'scroll-down');
     }, 300);
+} 
+
+// Add these new functions to handle min/max tempo dragging
+
+function handleMinTempoDragStart(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    isDraggingMinTempo = true;
+    minTempoStartY = e.clientY || (e.touches && e.touches[0].clientY);
+    
+    // Add visual indicator
+    minTempoInput.classList.add('dragging');
+}
+
+function handleMaxTempoDragStart(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    isDraggingMaxTempo = true;
+    maxTempoStartY = e.clientY || (e.touches && e.touches[0].clientY);
+    
+    // Add visual indicator
+    maxTempoInput.classList.add('dragging');
+}
+
+function handleMinMaxTempoDragMove(e) {
+    if (!isDraggingMinTempo && !isDraggingMaxTempo) return;
+    
+    if (typeof e.preventDefault === 'function') {
+        e.preventDefault();
+    }
+    
+    const currentY = e.clientY;
+    let deltaY = 0;
+    
+    if (isDraggingMinTempo) {
+        deltaY = minTempoStartY - currentY;
+        
+        if (Math.abs(deltaY) >= minMaxDragSensitivity) {
+            // Direction: positive for up/increase, negative for down/decrease
+            const direction = deltaY > 0 ? 1 : -1;
+            
+            // Calculate new min tempo
+            let newMinTempo = parseInt(minTempoInput.value) + direction;
+            
+            // Enforce limits
+            newMinTempo = Math.max(10, Math.min(500, newMinTempo));
+            
+            // Ensure min <= max
+            const maxTempo = parseInt(maxTempoInput.value);
+            if (newMinTempo > maxTempo) {
+                maxTempoInput.value = newMinTempo;
+            }
+            
+            // Update input
+            minTempoInput.value = newMinTempo;
+            
+            // Reset start position
+            minTempoStartY = currentY;
+            
+            // Trigger change event to update any related state
+            minTempoInput.dispatchEvent(new Event('change'));
+        }
+    }
+    
+    if (isDraggingMaxTempo) {
+        deltaY = maxTempoStartY - currentY;
+        
+        if (Math.abs(deltaY) >= minMaxDragSensitivity) {
+            // Direction: positive for up/increase, negative for down/decrease
+            const direction = deltaY > 0 ? 1 : -1;
+            
+            // Calculate new max tempo
+            let newMaxTempo = parseInt(maxTempoInput.value) + direction;
+            
+            // Enforce limits
+            newMaxTempo = Math.max(10, Math.min(500, newMaxTempo));
+            
+            // Ensure max >= min
+            const minTempo = parseInt(minTempoInput.value);
+            if (newMaxTempo < minTempo) {
+                minTempoInput.value = newMaxTempo;
+            }
+            
+            // Update input
+            maxTempoInput.value = newMaxTempo;
+            
+            // Reset start position
+            maxTempoStartY = currentY;
+            
+            // Trigger change event to update any related state
+            maxTempoInput.dispatchEvent(new Event('change'));
+        }
+    }
+}
+
+function handleMinMaxTempoDragEnd() {
+    if (isDraggingMinTempo) {
+        isDraggingMinTempo = false;
+        minTempoInput.classList.remove('dragging');
+    }
+    
+    if (isDraggingMaxTempo) {
+        isDraggingMaxTempo = false;
+        maxTempoInput.classList.remove('dragging');
+    }
 } 
