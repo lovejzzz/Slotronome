@@ -829,11 +829,45 @@ select {
     border: 2px solid #5a4320;
 }
 
+/* Customize checkbox appearance */
 .limit-checkbox input[type="checkbox"] {
     margin-right: 5px;
     width: 14px;
     height: 14px;
     cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsSAAALEgHS3X78AAAA7klEQVRYhe2XsQ7CIBCGf9PRwTeA+gYdk70iJg4O+gAuDi4OugHvoGMnE98AHqETPsBdwpQQoJSWUif+ySUEuPv4jyvQGB2wA0ZpuQIPzbldCTLhwqRlA66qlHPCqt9aa3Wm3AEjIK3I52iOiYTUPoGSAekHz4T2k1tnKQY6YG8h3/JeW+sMDFzAJEL5n3hvrXPgBIytynfih3HJt13sgLnS4qxcJ1TBJDGoirQx8XrgM3SIF5O4HhhJaYv0wBpYVp4DJSL9hAsG9prhr+Poq9//BZ4EJqfdaIg0nWsYQtNS7FexXcdB/tpKfVNDnQs+bPdYqFN5RDIAAAAASUVORK5CYII='), pointer;
+    /* Change the checkbox accent color */
+    accent-color: var(--accent-color);
+    /* For browsers that don't support accent-color, add a custom checkbox appearance */
+    position: relative;
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--text-color);
+    border: 1px solid #5a4320;
+    border-radius: 3px;
+}
+
+/* Add custom styling for checked state */
+.limit-checkbox input[type="checkbox"]:checked {
+    background-color: var(--accent-color);
+}
+
+/* Add a checkmark using ::after pseudo-element */
+.limit-checkbox input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid var(--slot-display-color);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* Add focus style for accessibility */
+.limit-checkbox input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(244, 180, 27, 0.5);
 }
 
 .limit-checkbox label {
