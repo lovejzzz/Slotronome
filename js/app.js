@@ -1214,7 +1214,30 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTimeSignatureDisplay(); // Initialize time signature display
     
     // Add debug message
-    console.log('Slotronome loaded - ready to initialize audio on user interaction');
+    console.log('Slotronome loaded - ready to initialize audio');
+    
+    // Add a one-time click handler to initialize audio on first interaction
+    const initAudioOnFirstInteraction = () => {
+        console.log('First user interaction detected - initializing audio');
+        initAudioContext();
+        
+        // Try to resume audio context immediately (needed for some browsers)
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('Audio context resumed on first interaction');
+                loadAudioSamples(); // Try loading samples right away
+            });
+        }
+    };
+    
+    // Automatically try to initialize audio on page load
+    // Note: This might not work until user interaction due to browser policies
+    initAudioContext();
+    
+    // But also set up the interaction listener as a fallback
+    document.addEventListener('click', initAudioOnFirstInteraction, { once: true });
+    
+    // Remove status overlay code - not needed anymore
     
     // Add a helper to check file availability
     window.checkAudioFiles = function() {
@@ -1250,9 +1273,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Check audio state on first user interaction
     document.body.addEventListener('click', function checkAudio() {
-        console.log('User interaction detected - checking audio files...');
-        window.checkAudioFiles();
-        logAudioState();
+        // If audio isn't loaded yet, try to load it
+        if (!audioSamplesLoaded && audioContext) {
+            // If context is suspended, resume it
+            if (audioContext.state === 'suspended') {
+                audioContext.resume().then(() => {
+                    loadAudioSamples();
+                });
+            } else {
+                // Otherwise just try loading the samples
+                loadAudioSamples();
+            }
+        }
+        
         // Remove this listener after first execution
         document.body.removeEventListener('click', checkAudio);
     }, { once: true });
@@ -2025,69 +2058,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('mouseup', handleMinMaxTempoDragEnd);
     document.addEventListener('touchend', handleMinMaxTempoDragEnd);
     document.addEventListener('touchcancel', handleMinMaxTempoDragEnd);
-    
-    // Add a one-time click handler to initialize audio on first interaction
-    const initAudioOnFirstInteraction = () => {
-        console.log('First user interaction detected - initializing audio');
-        initAudioContext();
-        
-        // Try to resume audio context immediately (needed for some browsers)
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                console.log('Audio context resumed on first interaction');
-                loadAudioSamples(); // Try loading samples right away
-            });
-        }
-    };
-    
-    // Add the one-time initialization listener to the whole document
-    document.addEventListener('click', initAudioOnFirstInteraction, { once: true });
-    
-    // Add debug status overlay
-    const statusOverlay = document.createElement('div');
-    statusOverlay.className = 'audio-status-overlay';
-    statusOverlay.style.position = 'fixed';
-    statusOverlay.style.bottom = '10px';
-    statusOverlay.style.right = '10px';
-    statusOverlay.style.background = 'rgba(0,0,0,0.7)';
-    statusOverlay.style.color = 'white';
-    statusOverlay.style.padding = '10px';
-    statusOverlay.style.borderRadius = '5px';
-    statusOverlay.style.fontFamily = 'monospace';
-    statusOverlay.style.fontSize = '12px';
-    statusOverlay.style.maxWidth = '300px';
-    statusOverlay.style.zIndex = '9999';
-    
-    // Add reload button
-    const reloadButton = document.createElement('button');
-    reloadButton.textContent = 'Reload Audio';
-    reloadButton.style.marginTop = '10px';
-    reloadButton.style.padding = '5px';
-    
-    reloadButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        forceReloadAudioSamples();
-        
-        // Update status immediately
-        updateStatusOverlay();
-    });
-    
-    // Function to update status display
-    function updateStatusOverlay() {
-        statusOverlay.innerHTML = `
-            <div>Audio Context: ${audioContext ? audioContext.state : 'null'}</div>
-            <div>Samples Loaded: ${audioSamplesLoaded ? 'Yes' : 'No'}</div>
-            <div>BassDrum: ${bassDrumBuffer ? 'Loaded' : 'Not Loaded'}</div>
-            <div>Snare: ${snareBuffer ? 'Loaded' : 'Not Loaded'}</div>
-        `;
-        statusOverlay.appendChild(reloadButton);
-    }
-    
-    // Initial update
-    document.body.appendChild(statusOverlay);
-    
-    // Update status every second
-    setInterval(updateStatusOverlay, 1000);
 });
 
 // Generate all digits for the rollers
