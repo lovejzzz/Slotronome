@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slotronome - Musical Slot Machine Metronome</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Slotronome</h1>
+        
+        <div class="slot-machine">
+            <div class="slot-display">
+                <div class="tempo-display">
+                    <!-- Time signature placed on the left side of tempo display -->
+                    <div class="time-sig-display" id="time-sig-display" title="Scroll or drag to change time signature">4/4</div>
+                    
+                    <div class="digit-container">
+                        <div class="digit-roller" id="hundreds-roller">
+                            <div class="digit">0</div>
+                            <div class="digit">1</div>
+                            <div class="digit">2</div>
+                            <div class="digit">3</div>
+                        </div>
+                    </div>
+                    <div class="digit-container">
+                        <div class="digit-roller" id="tens-roller">
+                            <div class="digit">0</div>
+                            <div class="digit">1</div>
+                            <div class="digit">2</div>
+                            <div class="digit">3</div>
+                            <div class="digit">4</div>
+                            <div class="digit">5</div>
+                            <div class="digit">6</div>
+                            <div class="digit">7</div>
+                            <div class="digit">8</div>
+                            <div class="digit">9</div>
+                        </div>
+                    </div>
+                    <div class="digit-container">
+                        <div class="digit-roller" id="ones-roller">
+                            <div class="digit">0</div>
+                            <div class="digit">1</div>
+                            <div class="digit">2</div>
+                            <div class="digit">3</div>
+                            <div class="digit">4</div>
+                            <div class="digit">5</div>
+                            <div class="digit">6</div>
+                            <div class="digit">7</div>
+                            <div class="digit">8</div>
+                            <div class="digit">9</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Add cogwheel control for BPM adjustment -->
+                    <div class="tempo-gear-container">
+                        <div class="tempo-gear" id="tempo-gear">
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-tooth"></div>
+                            <div class="gear-center"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tempo-input-overlay" id="tempo-input-overlay">
+                    <div class="input-container">
+                        <h3>Set BPM</h3>
+                        <div class="number-input-large">
+                            <button class="minus">-</button>
+                            <input type="number" id="direct-tempo-input" min="10" max="500" value="90">
+                            <button class="plus">+</button>
+                        </div>
+                        <div class="input-help">
+                            Shift+click: ±5 BPM<br>
+                            Ctrl+click: ±10 BPM
+                        </div>
+                        <div class="overlay-buttons">
+                            <button id="cancel-tempo-btn" class="pixel-button">Cancel</button>
+                            <button id="apply-tempo-btn" class="pixel-button">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="slot-handle-container">
+                <div class="slot-handle" id="slot-handle">
+                    <div class="handle-knob"></div>
+                    <div class="handle-arm"></div>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label for="min-tempo">Min Tempo:</label>
+                    <div class="number-input">
+                        <button class="minus">-</button>
+                        <input type="number" id="min-tempo" value="60" min="10" max="500">
+                        <button class="plus">+</button>
+                    </div>
+                    
+                    <label for="max-tempo" style="margin-top: 15px;">Max Tempo:</label>
+                    <div class="number-input">
+                        <button class="minus">-</button>
+                        <input type="number" id="max-tempo" value="90" min="10" max="500">
+                        <button class="plus">+</button>
+                    </div>
+                </div>
+                
+                <!-- Remove time signature from controls and add it as a hidden select for the popup -->
+                <div id="time-signature-popup" class="time-signature-popup">
+                    <select id="time-signature" class="pixel-select">
+                        <!-- Denominator 2 -->
+                        <option value="2/2">2/2</option>
+                        <option value="3/2">3/2</option>
+                        
+                        <!-- Denominator 4 -->
+                        <option value="2/4">2/4</option>
+                        <option value="3/4">3/4</option>
+                        <option value="4/4" selected>4/4</option>
+                        <option value="5/4">5/4</option>
+                        <option value="6/4">6/4</option>
+                        
+                        <!-- Denominator 8 -->
+                        <option value="3/8">3/8</option>
+                        <option value="4/8">4/8</option>
+                        <option value="5/8">5/8</option>
+                        <option value="6/8">6/8</option>
+                        <option value="7/8">7/8</option>
+                        <option value="9/8">9/8</option>
+                        <option value="12/8">12/8</option>
+                    </select>
+                </div>
+                
+                <div class="control-row">
+                    <div class="control-group">
+                        <label for="change-type">Change Type:</label>
+                        <select id="change-type" class="pixel-select">
+                            <option value="random" selected>Random</option>
+                            <option value="increment">Increment</option>
+                        </select>
+                        <div class="limit-checkbox">
+                            <input type="checkbox" id="limit-increment" checked>
+                            <label for="limit-increment">Limit</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Increment container (moved between change type and change tempo) -->
+                    <div id="increment-container" class="control-group" style="display: none;">
+                        <label for="increment-value">Increment Value:</label>
+                        <div class="number-input">
+                            <button class="minus">-</button>
+                            <input type="number" id="increment-value" value="2" min="-20" max="20">
+                            <button class="plus">+</button>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="bars-to-change">Change Tempo Every:</label>
+                        <div class="number-input">
+                            <button class="minus">-</button>
+                            <input type="number" id="bars-to-change" value="0" min="0" max="16">
+                            <button class="plus">+</button>
+                        </div>
+                        <div class="bars-label">bars</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="accent-controls">
+                <div id="accent-buttons" class="quarter-notes-container"></div>
+            </div>
+            
+            <div class="playback-controls">
+                <button id="start-stop-btn" class="start">START</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/app.js"></script>
+</body>
+</html> 

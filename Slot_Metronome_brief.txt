@@ -1,0 +1,68 @@
+Slot Metronome Brief
+====================
+
+Generated: March 21, 2025
+
+
+1. Project Overview
+-------------------
+
+Name: Slotronome
+Goal: To help music learner adapt different tempo in practice
+Description: I want the metronome looks and works like a slot machine, include the roller, make it real rolling animation. It will randomize a tempo with the range that user set. It will have different time signature, user can change the accent on beat. It can auto change tempo after certain bars that user set, can be random again or just add a number to it. (example, every 4 bars add 2 to the tempo). In the range set section, if user set the start and end point to the same number, this will work like a normal metronome.
+
+Target Audience: Music students
+Project Scope: Full Product
+
+2. Platform & Technical Requirements
+------------------------------------
+
+Application Type: Web Application
+Target Platforms: AI decision
+Frontend: Not specified
+Backend: Not specified
+Database: Not specified
+Hosting: Not specified
+APIs: Not specified
+Project Timeline: Not specified
+Technical Constraints: Use HTML
+
+3. Design & Visuals
+-------------------
+
+Art Style: 2D Pixel art
+Colors: AI decision
+Typography: AI decision
+Visual References: Stardew valley style
+
+4. User Interaction & Experience
+--------------------------------
+
+Inputs: User can input the range, initial range is 60 to 90. But user can type or click the arrow on it to adjust. And user can chose the time signature. And the accent to indicate the downbeat of each bar, initially on beat 1, but user can click on it to cancel it. Or user click on a different beat to change the accent to a different beat. We will need a button to stop the metronome.
+
+Outputs: 
+After user pull the handle of the slot machine metronome, there will be a animation, the animation last a measure long depends on the time signature and tempo, then the clicking starts like normal metronome.
+
+
+5. Content & Data Management
+----------------------------
+
+User Authentication: AI decision
+Data Storage & Privacy: AI decision
+Security Level: AI decision
+AI Integration: AI decision
+
+6. Performance & Compatibility
+------------------------------
+
+Speed & Responsiveness: AI decision
+SEO & Accessibility: AI decision
+Browser Compatibility: AI decision
+
+7. Additional Features
+----------------------
+
+Features Requested: Make it juicy, more like a game, make the animation smooth on everything.
+Success Criteria: AI decision
+Similar Products & Inspiration: Not specified
+Budget Constraints: Not specified
