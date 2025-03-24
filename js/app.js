@@ -84,32 +84,72 @@ function initAudioContext() {
 function loadAudioSamples() {
     if (audioSamplesLoaded) return;
     
-    // Load bass drum (accented beat)
-    fetch('Audio/BassDrum.mp3')
-        .then(response => response.arrayBuffer())
+    console.log('Loading audio samples...');
+    
+    // Reset the audio samples loaded flag to ensure both samples are loaded
+    audioSamplesLoaded = false;
+    
+    // Create promises for loading both samples
+    const loadBassDrum = fetch('./Audio/BassDrum.mp3')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Failed to load BassDrum.mp3: ${response.status} ${response.statusText}`);
+            }
+            return response.arrayBuffer();
+        })
         .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
         .then(audioBuffer => {
             bassDrumBuffer = audioBuffer;
-            console.log('Bass drum sample loaded');
+            console.log('Bass drum sample loaded successfully');
+            return true;
         })
-        .catch(error => console.error('Error loading bass drum sample:', error));
+        .catch(error => {
+            console.error('Error loading bass drum sample:', error);
+            return false;
+        });
     
-    // Load snare (non-accented beat)
-    fetch('Audio/Snare.wav')
-        .then(response => response.arrayBuffer())
+    const loadSnare = fetch('./Audio/Snare.wav')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Failed to load Snare.wav: ${response.status} ${response.statusText}`);
+            }
+            return response.arrayBuffer();
+        })
         .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
         .then(audioBuffer => {
             snareBuffer = audioBuffer;
-            console.log('Snare sample loaded');
-            audioSamplesLoaded = true;
+            console.log('Snare sample loaded successfully');
+            return true;
         })
-        .catch(error => console.error('Error loading snare sample:', error));
+        .catch(error => {
+            console.error('Error loading snare sample:', error);
+            return false;
+        });
+    
+    // Wait for both samples to load
+    Promise.all([loadBassDrum, loadSnare])
+        .then(results => {
+            // Both samples loaded successfully if both results are true
+            audioSamplesLoaded = results[0] && results[1];
+            console.log('Audio samples loaded status:', audioSamplesLoaded);
+            
+            if (!audioSamplesLoaded) {
+                console.warn('Some audio samples failed to load, will use fallback sounds');
+            }
+        });
 }
 
 // Generate a click sound
 function playClick(time, isAccent) {
-    // Use oscillator as fallback if samples haven't loaded
-    if (!audioSamplesLoaded || (!bassDrumBuffer && !snareBuffer)) {
+    console.log(`Playing ${isAccent ? 'accented' : 'non-accented'} beat. Samples loaded: ${audioSamplesLoaded}`);
+    
+    // Check if samples are loaded AND the specific buffer we need exists
+    const useBassDrum = isAccent && bassDrumBuffer;
+    const useSnare = !isAccent && snareBuffer;
+    
+    // Use oscillator as fallback if samples haven't loaded or the needed buffer doesn't exist
+    if (!audioSamplesLoaded || (!useBassDrum && !useSnare)) {
+        console.log('Using fallback oscillator sound');
         // Fallback to oscillator-based sound
         const clickOscillator = audioContext.createOscillator();
         const clickGain = audioContext.createGain();
@@ -131,6 +171,7 @@ function playClick(time, isAccent) {
     const buffer = isAccent ? bassDrumBuffer : snareBuffer;
     
     if (buffer) {
+        console.log(`Playing sample: ${isAccent ? 'BassDrum' : 'Snare'}`);
         const source = audioContext.createBufferSource();
         const gainNode = audioContext.createGain();
         
@@ -141,6 +182,8 @@ function playClick(time, isAccent) {
         gainNode.connect(audioContext.destination);
         
         source.start(time);
+    } else {
+        console.error(`Buffer not available for ${isAccent ? 'BassDrum' : 'Snare'} despite samples being loaded`);
     }
 }
 
@@ -447,7 +490,14 @@ function startMetronome() {
         
         // Resume audio context (might be suspended)
         if (audioContext.state === 'suspended') {
-            audioContext.resume();
+            audioContext.resume().then(() => {
+                console.log('Audio context resumed successfully');
+                // Make sure samples are loaded - might have failed the first time
+                if (!audioSamplesLoaded) {
+                    console.log('Retrying audio sample loading...');
+                    loadAudioSamples();
+                }
+            });
         }
         
         isPlaying = true;
@@ -1093,6 +1143,50 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTempoDisplay(tempo);
     createAccentButtons();
     updateTimeSignatureDisplay(); // Initialize time signature display
+    
+    // Add debug message
+    console.log('Slotronome loaded - ready to initialize audio on user interaction');
+    
+    // Add a helper to check file availability
+    window.checkAudioFiles = function() {
+        fetch('./Audio/BassDrum.mp3')
+            .then(response => {
+                console.log('BassDrum.mp3 fetch status:', response.status, response.statusText);
+                return response.ok;
+            })
+            .catch(err => {
+                console.error('Error checking BassDrum.mp3:', err);
+                return false;
+            });
+            
+        fetch('./Audio/Snare.wav')
+            .then(response => {
+                console.log('Snare.wav fetch status:', response.status, response.statusText);
+                return response.ok;
+            })
+            .catch(err => {
+                console.error('Error checking Snare.wav:', err);
+                return false;
+            });
+    };
+    
+    // Log audio context state when available
+    function logAudioState() {
+        if (audioContext) {
+            console.log('Audio context state:', audioContext.state);
+        } else {
+            console.log('Audio context not yet initialized');
+        }
+    }
+    
+    // Check audio state on first user interaction
+    document.body.addEventListener('click', function checkAudio() {
+        console.log('User interaction detected - checking audio files...');
+        window.checkAudioFiles();
+        logAudioState();
+        // Remove this listener after first execution
+        document.body.removeEventListener('click', checkAudio);
+    }, { once: true });
     
     // Variables to handle click vs. scroll intent
     let scrollIntentTimer = null;
