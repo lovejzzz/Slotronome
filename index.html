@@ -3,15 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1b2716">
+    <meta name="description" content="Slotronome — a pixel-art slot machine metronome that randomises your practice tempo.">
     <title>Slotronome - Musical Slot Machine Metronome</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%232d1e0f'/%3E%3Crect x='2' y='4' width='12' height='8' fill='%23120c06'/%3E%3Crect x='3' y='5' width='3' height='6' fill='%23ffcf4d'/%3E%3Crect x='7' y='5' width='2' height='6' fill='%23ffcf4d'/%3E%3Crect x='10' y='5' width='3' height='6' fill='%23ffcf4d'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div class="scene-glow" aria-hidden="true"></div>
+
     <div class="container">
-        <h1 class="title">Slotronome</h1>
-        
+        <header class="marquee">
+            <div class="marquee-bulbs" aria-hidden="true"></div>
+            <h1 class="title" data-text="Slotronome">Slotronome</h1>
+            <p class="tagline">Pull the lever &middot; practice every tempo</p>
+        </header>
+
         <div class="slot-machine">
+            <div class="cabinet-rivets" aria-hidden="true"></div>
+
             <div class="slot-display">
                 <div class="tempo-display">
                     <!-- Time signature placed on the left side of tempo display -->
@@ -24,6 +37,7 @@
                             <div class="digit">2</div>
                             <div class="digit">3</div>
                         </div>
+                        <div class="reel-glass" aria-hidden="true"></div>
                     </div>
                     <div class="digit-container">
                         <div class="digit-roller" id="tens-roller">
@@ -38,6 +52,7 @@
                             <div class="digit">8</div>
                             <div class="digit">9</div>
                         </div>
+                        <div class="reel-glass" aria-hidden="true"></div>
                     </div>
                     <div class="digit-container">
                         <div class="digit-roller" id="ones-roller">
@@ -52,8 +67,11 @@
                             <div class="digit">8</div>
                             <div class="digit">9</div>
                         </div>
+                        <div class="reel-glass" aria-hidden="true"></div>
                     </div>
-                    
+
+                    <div class="bpm-tag" aria-hidden="true">BPM</div>
+
                     <!-- Add cogwheel control for BPM adjustment -->
                     <div class="tempo-gear-container">
                         <div class="tempo-gear" id="tempo-gear">
@@ -98,6 +116,7 @@
             </div>
             
             <div class="slot-handle-container">
+                <div class="handle-mount" aria-hidden="true"></div>
                 <div class="slot-handle" id="slot-handle">
                     <div class="handle-knob"></div>
                     <div class="handle-arm"></div>
@@ -106,14 +125,14 @@
             
             <div class="controls">
                 <div class="control-group">
-                    <label for="min-tempo">Min Tempo:</label>
+                    <label for="min-tempo">Min Tempo</label>
                     <div class="number-input">
                         <button class="minus">-</button>
                         <input type="number" id="min-tempo" value="60" min="10" max="500">
                         <button class="plus">+</button>
                     </div>
                     
-                    <label for="max-tempo" style="margin-top: 15px;">Max Tempo:</label>
+                    <label for="max-tempo" class="stacked">Max Tempo</label>
                     <div class="number-input">
                         <button class="minus">-</button>
                         <input type="number" id="max-tempo" value="90" min="10" max="500">
@@ -123,7 +142,9 @@
                 
                 <!-- Remove time signature from controls and add it as a hidden select for the popup -->
                 <div id="time-signature-popup" class="time-signature-popup">
-                    <select id="time-signature" class="pixel-select">
+                    <div class="ts-panel">
+                        <h3>Time Signature</h3>
+                        <select id="time-signature" class="pixel-select">
                         <!-- Denominator 2 -->
                         <option value="2/2">2/2</option>
                         <option value="3/2">3/2</option>
@@ -143,12 +164,14 @@
                         <option value="7/8">7/8</option>
                         <option value="9/8">9/8</option>
                         <option value="12/8">12/8</option>
-                    </select>
+                        </select>
+                        <p class="ts-hint">Pick a meter, or scroll the 4/4 plate</p>
+                    </div>
                 </div>
                 
                 <div class="control-row">
                     <div class="control-group">
-                        <label for="change-type">Change Type:</label>
+                        <label for="change-type">Change Type</label>
                         <select id="change-type" class="pixel-select">
                             <option value="random" selected>Random</option>
                             <option value="increment">Increment</option>
@@ -161,7 +184,7 @@
                     
                     <!-- Increment container (moved between change type and change tempo) -->
                     <div id="increment-container" class="control-group" style="display: none;">
-                        <label for="increment-value">Increment Value:</label>
+                        <label for="increment-value">Increment</label>
                         <div class="number-input">
                             <button class="minus">-</button>
                             <input type="number" id="increment-value" value="2" min="-20" max="20">
@@ -170,7 +193,7 @@
                     </div>
                     
                     <div class="control-group">
-                        <label for="bars-to-change">Change Tempo Every:</label>
+                        <label for="bars-to-change">Change Every</label>
                         <div class="number-input">
                             <button class="minus">-</button>
                             <input type="number" id="bars-to-change" value="0" min="0" max="16">
@@ -182,12 +205,15 @@
             </div>
             
             <div class="accent-controls">
+                <span class="panel-caption">Accents</span>
                 <div id="accent-buttons" class="quarter-notes-container"></div>
             </div>
-            
+
             <div class="playback-controls">
                 <button id="start-stop-btn" class="start">START</button>
             </div>
+
+            <div class="cabinet-plate" aria-hidden="true">SLOTRONOME &middot; MOD. 4/4</div>
         </div>
     </div>
     
