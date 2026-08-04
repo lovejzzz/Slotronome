@@ -536,6 +536,13 @@ textarea {
     will-change: transform;
 }
 
+/* During a spin the position is driven per frame from script, so the CSS
+   transition has to get out of the way — otherwise every frame starts a fresh
+   500ms tween and the reel wobbles instead of turning. */
+.digit-roller.spinning {
+    transition: none;
+}
+
 .digit {
     width: 100%;
     height: 80px;

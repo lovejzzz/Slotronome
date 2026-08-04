@@ -11,7 +11,10 @@ calls at runtime.
 ## Features
 
 - **Slot machine reels** — three amber reels behind glass, with a lever that
-  spins up a new tempo from your range
+  spins up a new tempo from your range. The spin lasts exactly one measure at
+  the current tempo and meter, and the reels stop left to right
+- **Synthesised sound effects** — lever ratchet, reel ticks and detent thunks,
+  transport and toggle blips, all generated through the Web Audio API
 - **Digit-by-digit tempo control** — scroll, drag or arrow-key any single reel;
   places carry into each other like an odometer, so nudging the tens of `090`
   reads `100`
@@ -93,6 +96,30 @@ Shortcuts stay out of the way while you're typing in a field or a dialog is open
   appear for keyboard users
 - A polite live region announces tempo changes and accent toggles
 - `prefers-reduced-motion` disables the reel, bulb and flash animations
+
+## Sound
+
+Two sampled sounds carry the beat — `BassDrum.mp3` on accented beats, `Snare.wav`
+on the rest — with an oscillator fallback if either fails to decode.
+
+Everything else is synthesised at runtime from oscillators and filtered noise:
+the lever ratchet and its release, a tick as each digit rolls past the window,
+a pitched thunk as each reel drops into its detent (descending left to right),
+transport and accent blips, and a chirp when the Limit constraint lets go. They
+run on their own gain bus, mixed under the metronome so the click stays the
+loudest thing in the room. No audio files beyond the two samples.
+
+## The spin
+
+Pulling the lever runs one measure of animation before the click starts — the
+length the original brief asked for, so it scales with tempo and time signature
+rather than being a fixed delay. It is driven by `requestAnimationFrame`: each
+reel turns one way only, decelerates into its detent on an ease-out curve, and
+blurs in proportion to its speed. The reels stop in sequence at roughly 62%,
+82% and 100% of the measure.
+
+Each strip carries a repeat of its first digit at the bottom, which is what lets
+the loop wrap without dragging a blank gap through the window.
 
 ## Design
 

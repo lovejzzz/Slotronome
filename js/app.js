@@ -82,10 +82,155 @@ function releaseLimitConstraint() {
     const control = limitCheckbox.closest('.limit-checkbox');
     if (!control) return;
 
+    sfxLimitRelease();
+
     control.classList.remove('limit-released');
     void control.offsetWidth; // restart the animation on repeat releases
     control.classList.add('limit-released');
     setTimeout(() => control.classList.remove('limit-released'), 900);
+}
+
+/* ==========================================================================
+   Sound effects
+   Synthesised through the existing AudioContext rather than shipped as files,
+   so the cabinet stays asset-free. These replace a set of base64 MP3 blobs
+   that were too short to decode — every lever pull logged "no supported
+   source was found" and played nothing.
+   ========================================================================== */
+
+let sfxBusNode = null;
+let sfxNoiseBuffer = null;
+
+// Effects share one bus, kept well under the metronome so the click stays the
+// loudest thing in the room.
+function sfxBus() {
+    if (!audioContext) return null;
+    if (!sfxBusNode) {
+        sfxBusNode = audioContext.createGain();
+        sfxBusNode.gain.value = 0.8;
+        sfxBusNode.connect(audioContext.destination);
+    }
+    return sfxBusNode;
+}
+
+function sfxNoise() {
+    if (!sfxNoiseBuffer && audioContext) {
+        const length = Math.floor(audioContext.sampleRate * 0.4);
+        sfxNoiseBuffer = audioContext.createBuffer(1, length, audioContext.sampleRate);
+        const data = sfxNoiseBuffer.getChannelData(0);
+        for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    return sfxNoiseBuffer;
+}
+
+// Every effect is triggered by a user gesture, so it is safe to spin the
+// context up lazily here.
+function sfxReady() {
+    if (!audioContext) initAudioContext();
+    if (!audioContext) return false;
+    if (audioContext.state === 'suspended') audioContext.resume();
+    return true;
+}
+
+// A filtered burst of noise — the percussive half of most of these effects.
+function sfxBurst({ duration = 0.08, gain = 0.3, type = 'bandpass', freq = 1200, q = 1, delay = 0 }) {
+    const bus = sfxBus();
+    const buffer = sfxNoise();
+    if (!bus || !buffer) return;
+
+    const t = audioContext.currentTime + delay;
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+
+    const filter = audioContext.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.value = freq;
+    filter.Q.value = q;
+
+    const env = audioContext.createGain();
+    env.gain.setValueAtTime(gain, t);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+    source.connect(filter);
+    filter.connect(env);
+    env.connect(bus);
+    source.start(t);
+    source.stop(t + duration);
+}
+
+// A pitched blip, optionally sliding from one frequency to another.
+function sfxTone({ freq = 440, endFreq = null, type = 'square', duration = 0.1, gain = 0.15, delay = 0 }) {
+    const bus = sfxBus();
+    if (!bus) return;
+
+    const t = audioContext.currentTime + delay;
+    const osc = audioContext.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(endFreq, 1), t + duration);
+
+    const env = audioContext.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+    osc.connect(env);
+    env.connect(bus);
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+}
+
+// Lever hauled down: a ratchet, then the mechanism catching.
+function sfxLeverPull() {
+    if (!sfxReady()) return;
+    for (let i = 0; i < 5; i++) {
+        sfxBurst({ duration: 0.03, gain: 0.55, type: 'bandpass', freq: 2600 - i * 260, q: 3, delay: i * 0.035 });
+    }
+    sfxTone({ freq: 260, endFreq: 90, type: 'sawtooth', duration: 0.18, gain: 0.16, delay: 0.02 });
+}
+
+// Lever springing back to rest.
+function sfxLeverRelease() {
+    if (!sfxReady()) return;
+    sfxBurst({ duration: 0.09, gain: 0.24, type: 'highpass', freq: 2200 });
+    sfxTone({ freq: 520, endFreq: 300, type: 'triangle', duration: 0.12, gain: 0.09 });
+}
+
+// One digit rolling past the window.
+function sfxReelTick() {
+    if (!audioContext) return;
+    sfxBurst({ duration: 0.018, gain: 0.11, type: 'highpass', freq: 3200 });
+}
+
+// A reel dropping into its detent — pitched down as you go left to right so
+// the three stops read as a descending sequence.
+function sfxReelStop(index) {
+    if (!audioContext) return;
+    sfxBurst({ duration: 0.05, gain: 0.3, type: 'lowpass', freq: 900 });
+    sfxTone({ freq: [220, 175, 140][index] || 160, endFreq: 60, type: 'triangle', duration: 0.14, gain: 0.22 });
+}
+
+function sfxTransport(starting) {
+    if (!sfxReady()) return;
+    if (starting) {
+        sfxTone({ freq: 440, duration: 0.07, gain: 0.13 });
+        sfxTone({ freq: 660, duration: 0.11, gain: 0.13, delay: 0.07 });
+    } else {
+        sfxTone({ freq: 550, duration: 0.07, gain: 0.12 });
+        sfxTone({ freq: 330, duration: 0.13, gain: 0.12, delay: 0.07 });
+    }
+}
+
+function sfxToggle(on) {
+    if (!sfxReady()) return;
+    sfxTone({ freq: on ? 720 : 460, type: 'square', duration: 0.055, gain: 0.1 });
+    sfxBurst({ duration: 0.02, gain: 0.1, type: 'highpass', freq: 3000 });
+}
+
+// The Limit constraint letting go — pairs with the checkbox flash.
+function sfxLimitRelease() {
+    if (!audioContext) return;
+    sfxTone({ freq: 880, endFreq: 420, type: 'triangle', duration: 0.16, gain: 0.11 });
 }
 
 // Restart the beat timer so a tempo change takes effect on the next click
@@ -266,15 +411,12 @@ function playClick(time, isAccent) {
         audioContext.resume();
     }
     
-    console.log(`Playing ${isAccent ? 'accented' : 'non-accented'} beat. Samples loaded: ${audioSamplesLoaded}, BassDrum: ${bassDrumBuffer ? 'YES' : 'NO'}, Snare: ${snareBuffer ? 'YES' : 'NO'}`);
-    
     // Check if samples are loaded AND the specific buffer we need exists
     const useBassDrum = audioSamplesLoaded && isAccent && bassDrumBuffer;
     const useSnare = audioSamplesLoaded && !isAccent && snareBuffer;
     
     // Use oscillator as fallback if samples haven't loaded or the needed buffer doesn't exist
     if (!useBassDrum && !useSnare) {
-        console.log('Using fallback oscillator sound, samples not ready');
         // Fallback to oscillator-based sound
         const clickOscillator = audioContext.createOscillator();
         const clickGain = audioContext.createGain();
@@ -296,7 +438,6 @@ function playClick(time, isAccent) {
     const buffer = isAccent ? bassDrumBuffer : snareBuffer;
     
     if (buffer) {
-        console.log(`Playing sample: ${isAccent ? 'BassDrum' : 'Snare'}`);
         const source = audioContext.createBufferSource();
         const gainNode = audioContext.createGain();
         
@@ -610,15 +751,12 @@ function pullHandle() {
     if (slotHandle.classList.contains('pulled') || slotHandle.classList.contains('releasing')) {
         return; // Already animating
     }
-    
-    // Play mechanical sound effect
-    const clickSound = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAYGBgYGBgYGBgYGBgYGBgYGBgj4+Pj4+Pj4+Pj4+Pj4+Pj4+PwMDAwMDAwMDAwMDAwMDAwMDA/////////////////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAANmAKIWUEQAGHDJACTjQAAwghMGPtMHYwVDCQMFYxczBiMXcwxzEiMJ0wITEFNB8wpjM//+n/9P/6f9J/+oAEv9Z2X1dp6VVrSLPokMEhEUEAAhwJ5Y2HWpPR0mL2BWX5QLLw+/+MYxA8WAH62tBmGGJQl8BbOgQxJUPwfL32l7lrvt5SJ5qSfG2Y2wAAAlgWCMCMXkDKjlAMZqTGVcZcpmMMaVgRoHAO1o9xkGb9v/m/f7/9v/v+f+///d5aCIJ6gDo2Mb+HYfVZUwBv/K/+MYxAgWcFrJVhnGSJBcZPDIxLYEbYHqA88BRILDCkWCr8PLT/97/+//v/+f/////uFJBEEtQCSH5IY9xZ9d7Pf7TG/s3/6f2pAYzh6aV6jHAZABAYzgoYMgAkCAKKAwkDnCAA6Avo4//+MYxAcSwFrVFgBG0N1/6X//X//p+3///12nGJBEMRCQnOMYoY+ij9BukJf6pqy5JIQFAYahCYYBXYYhmNABGAYLBUYJgUYXA+AgEGJnWe+v9f/X/9PN5G+/2t1eZx41IAJIaUpf+/P/+MYxAsT8F7dVgBG0W3/5v+P4/98f3//tQwwTLDBM0GxQMBvKBgA6PASFg+JjQX+oYS3/X/9f/9P6H99Xv8yf9aGMgaCQYoACBAAYEDCYCgWLKDkpycDhmPnP6+39fb3Nj+nTzd9f/+MYxA4WUH7NFhmG/Tfzf87f3P/9v7vT/+OggJFPmAKoEgD6nQ8GZCGdRZVaHwzHev63/f+6Sz2c5/eXm7fL5fkBDzj1tSqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq');
-    clickSound.volume = 0.3;
-    clickSound.play();
-    
+
+    sfxLeverPull();
+
     // Animate the handle pull with a more realistic motion
     slotHandle.classList.add('pulled');
-    
+
     // Add a slight shake effect
     let shakeCount = 0;
     const maxShakes = 3;
@@ -628,53 +766,46 @@ function pullHandle() {
             clearInterval(shakeInterval);
             return;
         }
-        
+
         // Alternate between slightly different rotations for shake effect
         const rotationAdjust = shakeCount % 2 === 0 ? 2 : -2;
         slotHandle.style.transform = `rotate(${45 + rotationAdjust}deg)`;
     }, 50);
-    
-    // Generate the spinning animation for the rollers
-    spinRollers();
-    
-    // After a short delay, release the handle
+
+    // Spin the reels, and only start the metronome once they have all settled.
+    // The old code started it on a fixed 1350ms timeout, which cut across the
+    // spin at slow tempos and lagged behind it at fast ones.
+    spinRollers(() => {
+        if (!isPlaying) {
+            startMetronome();
+        } else {
+            rescheduleTransport();
+        }
+    });
+
+    // Release the handle
     setTimeout(() => {
         clearInterval(shakeInterval); // Ensure interval is cleared
         slotHandle.style.transform = ''; // Remove inline transform
         slotHandle.classList.remove('pulled');
         slotHandle.classList.add('releasing');
-        
-        // Play release sound with slight delay
-        setTimeout(() => {
-            const releaseSound = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAYGBgYGBgYGBgYGBgYGBgYGBgj4+Pj4+Pj4+Pj4+Pj4+Pj4+PwMDAwMDAwMDAwMDAwMDAwMDA/////////////////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+MYxAAP2AqQWUEQAqBG49gWSJAfMAaIJBFBYQDUNkgsF8A2FJB1H2kQLMf/9a1bA/1CAO5XvEAsD/8DgQNqf/i/+qqq4H+wF8DZ/+MYxAgWMHbmVhmGVQAHpd8H4HQqqgCAIwVV5dWq7/1VV6v/OAgCkILW//mVX/KAGP+NAAAAL/8zM9v/zMzMz/ZVVAQmAIgMoDoGUGcAgFY/+MYxAoUuGrIADDMlPWqlV3/1UDRBgqCmr//sBME0JBYqp/9RgdAuAtxSWZ/5g/mIVU/+uf/qWvYpmAIAMGMMUBABGACAYKgEALCcq4Xw+Pj4PAZ//+v/+u/+MYxA8WwG7IABmGTP+9X/r///4/E2/+YPsIDiACAVGJGUFh+f/LpNCIzP///M3//lIKJiMzP/8oPiRigKJECFBcUJjg0PDw8PDwAgeHh4fjw8PDw9Bgc/+MYxA4VmH7QABGGlPwPh4PCgeHh4eEBAQDhAMCAgP///wPDw8IH/ywfNDQ0eGhoSEhoaGiTQ0NDQ0NExwiQyf+kxERDHh4aGv/+Gf//8yJiIiH/6TEVERn///MiYuLi4iIf/+MYxA8WEIK4AAmGmOIi4uL//iIiIiIh//ERcXFxcRDIOD4+Ii4v//iIuLi4iIgGBAQBb/x/H+P//H///8QEBAMDgYEAwQEA4QEAMHh4OwgICAcIBgYEAwICAYEBAQDBAQEA');
-            releaseSound.volume = 0.2;
-            releaseSound.play();
-        }, 100);
-        
+
+        setTimeout(sfxLeverRelease, 100);
+
         // Add bounce effect at the end of release animation
         setTimeout(() => {
             slotHandle.classList.add('bounce');
-            
-            // Remove classes after animation completes
+
             setTimeout(() => {
                 slotHandle.classList.remove('releasing');
                 slotHandle.classList.remove('bounce');
-                
-                // After handle animation completes, start the metronome
-                if (!isPlaying) {
-                    startMetronome();
-                } else {
-                    // If already playing, just update the interval with new tempo
-                    clearInterval(metronomeInterval);
-                    metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-                }
             }, 600);
         }, 400);
     }, 350);
 }
 
 // Create spinning animation for the rollers
-function spinRollers() {
+function spinRollers(onComplete) {
     // Get tempo bounds for reference only
     const minTempo = parseInt(minTempoInput.value);
     const maxTempo = parseInt(maxTempoInput.value);
@@ -736,81 +867,126 @@ function spinRollers() {
         }
     }
     
-    // Create spinning effect by rapidly changing digits with acceleration and deceleration
-    let spins = 0;
-    const maxSpins = 15; // Increased for longer animation
-    let spinDuration = 50; // Start fast
-    
-    const spinInterval = setInterval(() => {
-        spins++;
-        
-        // Generate random numbers for the spin animation - display can show any value
-        // but only for animation purposes
-        const displayMin = Math.max(10, minTempo - 20);
-        const displayMax = Math.min(500, maxTempo + 20);
-        const randomTempo = Math.floor(Math.random() * (displayMax - displayMin + 1)) + displayMin;
-        updateTempoDisplay(randomTempo);
-        
-        // Gradually slow down the spinning
-        if (spins > maxSpins / 2) {
-            spinDuration += 15; // Slow down gradually
-            clearInterval(spinInterval);
-            
-            // Continue with new interval duration
-            if (spins < maxSpins) {
-                setTimeout(() => {
-                    const newRandomTempo = Math.floor(Math.random() * (displayMax - displayMin + 1)) + displayMin;
-                    updateTempoDisplay(newRandomTempo);
-                    
-                    // Schedule next spin with increased duration
-                    if (spins < maxSpins - 1) {
-                        setTimeout(function continueSpinning() {
-                            spins++;
-                            spinDuration += 20;
-                            
-                            const finalRandomTempo = Math.floor(Math.random() * (displayMax - displayMin + 1)) + displayMin;
-                            updateTempoDisplay(finalRandomTempo);
-                            
-                            if (spins < maxSpins) {
-                                setTimeout(continueSpinning, spinDuration);
-                            } else {
-                                // Final tempo display
-                                setTimeout(() => {
-                                    updateTempoDisplay(tempo);
-                                    
-                                    // If playing, update the interval
-                                    if (isPlaying) {
-                                        clearInterval(metronomeInterval);
-                                        metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-                                    }
-                                }, 200);
-                            }
-                        }, spinDuration);
-                    } else {
-                        // Final tempo display
-                        setTimeout(() => {
-                            updateTempoDisplay(tempo);
-                            
-                            // If playing, update the interval
-                            if (isPlaying) {
-                                clearInterval(metronomeInterval);
-                                metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-                            }
-                        }, 200);
-                    }
-                }, spinDuration);
-            } else {
-                // Final tempo display
-                updateTempoDisplay(tempo);
-                
-                // If playing, update the interval
-                if (isPlaying) {
-                    clearInterval(metronomeInterval);
-                    metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
+    // Hand the reels to the animator; it lands them on `tempo` and calls back
+    // when the last one stops.
+    animateReels(tempo, onComplete);
+}
+
+const DIGIT_HEIGHT = 80;   // must match .digit height in the stylesheet
+let reelSpinFrame = null;
+
+// Where a reel currently sits, as a positive scroll offset in pixels.
+function currentReelOffset(roller) {
+    const transform = getComputedStyle(roller).transform;
+    if (transform === 'none') return 0;
+    const y = parseFloat(transform.split(',')[5]);
+    return Number.isFinite(y) ? -y : 0;
+}
+
+// Spin the reels and land them on the digits of `finalTempo`.
+//
+// Driven by requestAnimationFrame instead of the old chain of nested
+// setTimeouts, which redrew random values every ~50ms while the CSS transition
+// underneath was still 500ms long. The reels never finished a move before the
+// next one started, so they wobbled back and forth — measured at 8-11 direction
+// reversals per pull — instead of turning. They also always took ~1950ms
+// regardless of tempo or meter, and stopped in a random order.
+//
+// Now each reel turns one way only, decelerates into its detent, and they stop
+// left to right. The whole spin lasts one measure, which is what the original
+// brief asked for.
+function animateReels(finalTempo, onComplete) {
+    if (reelSpinFrame) cancelAnimationFrame(reelSpinFrame);
+
+    // One bar at the *incoming* tempo. Clamped so a very slow or very fast
+    // setting still feels like a slot machine rather than a stall or a blink.
+    const barMs = (60 / Math.max(tempo, 1)) * timeSignature.numerator * 1000;
+    const duration = Math.min(4200, Math.max(900, barMs));
+
+    const reels = [
+        { roller: hundredsRoller, target: Math.floor(finalTempo / 100) },
+        { roller: tensRoller, target: Math.floor((finalTempo % 100) / 10) },
+        { roller: onesRoller, target: finalTempo % 10 }
+    ].map((reel, i) => {
+        const count = parseInt(reel.roller.dataset.digitCount) || reel.roller.children.length;
+        const loop = count * DIGIT_HEIGHT;
+        const start = currentReelOffset(reel.roller);
+        // Distance still to travel once whole revolutions are accounted for
+        const remainder = (((reel.target * DIGIT_HEIGHT) - start) % loop + loop) % loop;
+        return {
+            ...reel,
+            loop,
+            start,
+            stopAt: duration * [0.62, 0.82, 1][i],
+            total: (2 + i) * loop + remainder,
+            travelled: start,
+            lastDigit: -1,
+            stopped: false
+        };
+    });
+
+    reels.forEach(reel => reel.roller.classList.add('spinning'));
+
+    const startedAt = performance.now();
+    let lastTickAt = 0;
+
+    const frame = (now) => {
+        const elapsed = now - startedAt;
+        let running = false;
+
+        reels.forEach((reel, i) => {
+            const progress = Math.min(1, elapsed / reel.stopAt);
+            const eased = 1 - Math.pow(1 - progress, 3);   // ease out, like a reel losing momentum
+            const travelled = reel.start + reel.total * eased;
+            const position = travelled % reel.loop;
+            reel.roller.style.transform = `translateY(${-position}px)`;
+
+            // At full speed a reel covers most of a digit per frame, which
+            // strobes badly on its own. Blurring in proportion to speed reads
+            // as motion instead of as a glitch.
+            const speed = travelled - reel.travelled;
+            reel.travelled = travelled;
+            const blur = Math.min(3.2, Math.max(0, speed / 22));
+            reel.roller.style.filter = blur > 0.15 ? `blur(${blur.toFixed(2)}px)` : '';
+
+            const digit = Math.floor(position / DIGIT_HEIGHT);
+            if (digit !== reel.lastDigit) {
+                // Throttled, so the ticks thin out as the reels slow instead of
+                // machine-gunning at full speed.
+                if (reel.lastDigit !== -1 && now - lastTickAt > 55) {
+                    sfxReelTick();
+                    lastTickAt = now;
                 }
+                reel.lastDigit = digit;
             }
+
+            if (progress < 1) {
+                running = true;
+            } else if (!reel.stopped) {
+                reel.stopped = true;
+                sfxReelStop(i);
+            }
+        });
+
+        if (running) {
+            reelSpinFrame = requestAnimationFrame(frame);
+            return;
         }
-    }, spinDuration);
+
+        reelSpinFrame = null;
+        reels.forEach(reel => {
+            reel.roller.classList.remove('spinning');
+            reel.roller.style.filter = '';
+        });
+        // Settle on the live tempo rather than the value captured when the
+        // spin began — an auto-change can land on a bar boundary mid-spin, and
+        // the reels should agree with the metronome, not with stale input.
+        updateTempoDisplay(tempo);
+        announce(`${tempo} BPM`);
+        if (onComplete) onComplete();
+    };
+
+    reelSpinFrame = requestAnimationFrame(frame);
 }
 
 // Create accent buttons based on time signature (using quarter note symbols)
@@ -860,6 +1036,7 @@ function toggleAccent(beatIndex) {
         accentBeats.push(beatIndex);
     }
 
+    sfxToggle(!isAccented);
     button.classList.toggle('accent', !isAccented);
     button.setAttribute('aria-pressed', String(!isAccented));
     announce(`Beat ${beatIndex + 1} accent ${!isAccented ? 'on' : 'off'}`);
@@ -1527,6 +1704,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             startMetronome();
         }
+        sfxTransport(isPlaying);
     });
     
     // Slot handle pull
@@ -1947,30 +2125,26 @@ document.addEventListener('DOMContentLoaded', () => {
 function generateDigits() {
     // Only call once the DOM is fully loaded
     document.addEventListener('DOMContentLoaded', () => {
-        // Generate digits for hundreds (0-5 for up to 500 BPM)
-        hundredsRoller.innerHTML = '';
-        for (let i = 0; i < 6; i++) {
-            const digitDiv = document.createElement('div');
-            digitDiv.className = 'digit';
-            digitDiv.textContent = i;
-            hundredsRoller.appendChild(digitDiv);
-        }
-        
-        // Generate digits for tens and ones (0-9)
-        tensRoller.innerHTML = '';
-        onesRoller.innerHTML = '';
-        for (let i = 0; i < 10; i++) {
-            const tenDigitDiv = document.createElement('div');
-            tenDigitDiv.className = 'digit';
-            tenDigitDiv.textContent = i;
-            tensRoller.appendChild(tenDigitDiv);
-            
-            const oneDigitDiv = document.createElement('div');
-            oneDigitDiv.className = 'digit';
-            oneDigitDiv.textContent = i;
-            onesRoller.appendChild(oneDigitDiv);
-        }
+        // Hundreds only ever reaches 5 (500 BPM ceiling); tens and ones are 0-9
+        buildReel(hundredsRoller, 6);
+        buildReel(tensRoller, 10);
+        buildReel(onesRoller, 10);
     });
+}
+
+// Fill one reel with its digits, plus a repeat of the first digit at the
+// bottom. That duplicate is what makes the spin loop seamlessly: the strip can
+// scroll past the last digit into an identical copy of the first before
+// wrapping back to the top, instead of dragging a blank gap through the window.
+function buildReel(roller, count) {
+    roller.innerHTML = '';
+    for (let i = 0; i <= count; i++) {
+        const digit = document.createElement('div');
+        digit.className = 'digit';
+        digit.textContent = i % count;
+        roller.appendChild(digit);
+    }
+    roller.dataset.digitCount = count;
 }
 
 // Add this new function to handle individual digit dragging
@@ -2320,6 +2494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (onOwnControl) return;
                 e.preventDefault();
                 if (isPlaying) stopMetronome(); else startMetronome();
+                sfxTransport(isPlaying);
                 announce(isPlaying ? 'Playing' : 'Stopped');
                 break;
 
