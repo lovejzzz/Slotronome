@@ -71,6 +71,28 @@ const directTempoInput = document.getElementById('direct-tempo-input');
 const cancelTempoBtn = document.getElementById('cancel-tempo-btn');
 const applyTempoBtn = document.getElementById('apply-tempo-btn');
 
+// The Limit constraint only means anything while the tempo sits inside the
+// min/max range, so moving outside it releases the constraint rather than
+// yanking the tempo back. Flash the control on the way out — the checkbox used
+// to clear itself with no feedback at all, which read as a glitch.
+function releaseLimitConstraint() {
+    if (!isLimitIncrement) return;
+
+    const limitCheckbox = document.getElementById('limit-increment');
+    if (!limitCheckbox) return;
+
+    limitCheckbox.checked = false;
+    isLimitIncrement = false;
+
+    const control = limitCheckbox.closest('.limit-checkbox');
+    if (!control) return;
+
+    control.classList.remove('limit-released');
+    void control.offsetWidth; // restart the animation on repeat releases
+    control.classList.add('limit-released');
+    setTimeout(() => control.classList.remove('limit-released'), 900);
+}
+
 // Initialize Audio Context (on user interaction)
 function initAudioContext() {
     if (!audioContext) {
@@ -352,11 +374,9 @@ function changeMetronomeTempo() {
                 isAtMaxLimit = true;
             }
             
-            // If tempo exceeds range, uncheck the limit checkbox
-            const limitCheckbox = document.getElementById('limit-increment');
-            if (limitCheckbox && (tempo < minTempo || tempo > maxTempo)) {
-                limitCheckbox.checked = false;
-                isLimitIncrement = false;
+            // Leaving the min/max range releases the Limit constraint
+            if (tempo < minTempo || tempo > maxTempo) {
+                releaseLimitConstraint();
             }
         }
     }
@@ -431,13 +451,9 @@ function setTempoDirectly(newTempo) {
         isAtMaxLimit = true;
     }
     
-    // If tempo exceeds range, uncheck the limit checkbox
-    if (isLimitIncrement && (tempo < minTempo || tempo > maxTempo)) {
-        const limitCheckbox = document.getElementById('limit-increment');
-        if (limitCheckbox) {
-            limitCheckbox.checked = false;
-            isLimitIncrement = false;
-        }
+    // Leaving the min/max range releases the Limit constraint
+    if (tempo < minTempo || tempo > maxTempo) {
+        releaseLimitConstraint();
     }
     
     updateTempoDisplay(tempo);
@@ -506,13 +522,9 @@ function handleTempoWheel(e) {
         isAtMaxLimit = true;
     }
     
-    // If tempo exceeds range, uncheck the limit checkbox
-    if (isLimitIncrement && (newTempo < minTempo || newTempo > maxTempo)) {
-        const limitCheckbox = document.getElementById('limit-increment');
-        if (limitCheckbox) {
-            limitCheckbox.checked = false;
-            isLimitIncrement = false;
-        }
+    // Leaving the min/max range releases the Limit constraint
+    if (newTempo < minTempo || newTempo > maxTempo) {
+        releaseLimitConstraint();
     }
     
     // Apply the new tempo directly
@@ -748,11 +760,9 @@ function spinRollers() {
                 isAtMaxLimit = true;
             }
             
-            // If tempo exceeds range, uncheck the limit checkbox
-            const limitCheckbox = document.getElementById('limit-increment');
-            if (limitCheckbox && (tempo < minTempo || tempo > maxTempo)) {
-                limitCheckbox.checked = false;
-                isLimitIncrement = false;
+            // Leaving the min/max range releases the Limit constraint
+            if (tempo < minTempo || tempo > maxTempo) {
+                releaseLimitConstraint();
             }
         }
     }
@@ -1104,13 +1114,9 @@ function handleGearDrag(e) {
             isAtMaxLimit = true;
         }
         
-        // If tempo exceeds range, uncheck the limit checkbox
-        if (isLimitIncrement && (newTempo < minTempo || newTempo > maxTempo)) {
-            const limitCheckbox = document.getElementById('limit-increment');
-            if (limitCheckbox) {
-                limitCheckbox.checked = false;
-                isLimitIncrement = false;
-            }
+        // Leaving the min/max range releases the Limit constraint
+        if (newTempo < minTempo || newTempo > maxTempo) {
+            releaseLimitConstraint();
         }
         
         // Apply the new tempo directly
@@ -1196,13 +1202,9 @@ function applyDirectTempo() {
         isAtMaxLimit = true;
     }
     
-    // If tempo exceeds range, uncheck the limit checkbox
-    if (isLimitIncrement && (newTempo < minTempo || newTempo > maxTempo)) {
-        const limitCheckbox = document.getElementById('limit-increment');
-        if (limitCheckbox) {
-            limitCheckbox.checked = false;
-            isLimitIncrement = false;
-        }
+    // Leaving the min/max range releases the Limit constraint
+    if (newTempo < minTempo || newTempo > maxTempo) {
+        releaseLimitConstraint();
     }
     
     // Apply the new tempo without clamping to min/max range
@@ -1531,13 +1533,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 isAtMaxLimit = true;
             }
             
-            // If tempo exceeds range, uncheck the limit checkbox
-            if (isLimitIncrement && (newTempo < minTempo || newTempo > maxTempo)) {
-                const limitCheckbox = document.getElementById('limit-increment');
-                if (limitCheckbox) {
-                    limitCheckbox.checked = false;
-                    isLimitIncrement = false;
-                }
+            // Leaving the min/max range releases the Limit constraint
+            if (newTempo < minTempo || newTempo > maxTempo) {
+                releaseLimitConstraint();
             }
             
             // Apply visual feedback based on drag direction
@@ -1675,13 +1673,9 @@ document.addEventListener('DOMContentLoaded', () => {
             maxTempoInput.value = min;
         }
         
-        // If tempo is now below min and limit is checked, uncheck the limit checkbox
-        if (isLimitIncrement && tempo < min) {
-            const limitCheckbox = document.getElementById('limit-increment');
-            if (limitCheckbox) {
-                limitCheckbox.checked = false;
-                isLimitIncrement = false;
-            }
+        // Raising min past the current tempo releases the Limit constraint
+        if (tempo < min) {
+            releaseLimitConstraint();
         }
     });
     
@@ -1694,13 +1688,9 @@ document.addEventListener('DOMContentLoaded', () => {
             minTempoInput.value = max;
         }
         
-        // If tempo is now above max and limit is checked, uncheck the limit checkbox
-        if (isLimitIncrement && tempo > max) {
-            const limitCheckbox = document.getElementById('limit-increment');
-            if (limitCheckbox) {
-                limitCheckbox.checked = false;
-                isLimitIncrement = false;
-            }
+        // Lowering max below the current tempo releases the Limit constraint
+        if (tempo > max) {
+            releaseLimitConstraint();
         }
     });
     
@@ -2141,19 +2131,14 @@ function handleDigitDragMove(e) {
         // Calculate new tempo based on which digit is being dragged
         let newTempo = tempo;
         
+        // Each place carries into the next like an odometer, so nudging the
+        // tens of 090 up reads 100 rather than rolling the reel back to 000.
         if (isHundreds) {
-            // Adjust hundreds place
             newTempo = tempo + (direction * 100);
         } else if (isTens) {
-            // Adjust tens place, but keep within valid range for the tens digit (0-9)
-            const currentTens = Math.floor((tempo % 100) / 10);
-            const newTens = (currentTens + direction + 10) % 10; // Ensure it wraps around 0-9
-            newTempo = tempo - (currentTens * 10) + (newTens * 10);
+            newTempo = tempo + (direction * 10);
         } else if (isOnes) {
-            // Adjust ones place, but keep within valid range for the ones digit (0-9)
-            const currentOnes = tempo % 10;
-            const newOnes = (currentOnes + direction + 10) % 10; // Ensure it wraps around 0-9
-            newTempo = tempo - currentOnes + newOnes;
+            newTempo = tempo + direction;
         }
         
         // Apply visual feedback based on drag direction
@@ -2189,13 +2174,9 @@ function handleDigitDragMove(e) {
             isAtMaxLimit = true;
         }
         
-        // If tempo exceeds range, uncheck the limit checkbox
-        if (isLimitIncrement && (newTempo < minTempo || newTempo > maxTempo)) {
-            const limitCheckbox = document.getElementById('limit-increment');
-            if (limitCheckbox) {
-                limitCheckbox.checked = false;
-                isLimitIncrement = false;
-            }
+        // Leaving the min/max range releases the Limit constraint
+        if (newTempo < minTempo || newTempo > maxTempo) {
+            releaseLimitConstraint();
         }
         
         // Apply the new tempo directly
@@ -2210,9 +2191,12 @@ function handleDigitDragMove(e) {
         // Reset the start position
         digitDragStartY = e.clientY;
         
-        // Remove scrolling classes after animation completes
+        // Remove scrolling classes after animation completes. Capture the
+        // element now — releasing the drag nulls currentDraggedDigit, and this
+        // callback used to throw and strand the scroll indicator lit.
+        const draggedDigit = currentDraggedDigit;
         setTimeout(() => {
-            currentDraggedDigit.classList.remove('scrolling', 'scroll-up', 'scroll-down');
+            draggedDigit.classList.remove('scrolling', 'scroll-up', 'scroll-down');
         }, 300);
     }
 }
@@ -2312,19 +2296,14 @@ function handleDigitWheel(e, digitContainer) {
     // Calculate new tempo based on which digit is being scrolled
     let newTempo = tempo;
     
+    // Each place carries into the next like an odometer, so nudging the
+    // tens of 090 up reads 100 rather than rolling the reel back to 000.
     if (isHundreds) {
-        // Adjust hundreds place
         newTempo = tempo + (direction * 100);
     } else if (isTens) {
-        // Adjust tens place, but keep within valid range for the tens digit (0-9)
-        const currentTens = Math.floor((tempo % 100) / 10);
-        const newTens = (currentTens + direction + 10) % 10; // Ensure it wraps around 0-9
-        newTempo = tempo - (currentTens * 10) + (newTens * 10);
+        newTempo = tempo + (direction * 10);
     } else if (isOnes) {
-        // Adjust ones place, but keep within valid range for the ones digit (0-9)
-        const currentOnes = tempo % 10;
-        const newOnes = (currentOnes + direction + 10) % 10; // Ensure it wraps around 0-9
-        newTempo = tempo - currentOnes + newOnes;
+        newTempo = tempo + direction;
     }
     
     // Get the min and max tempos for limit checks
@@ -2349,13 +2328,9 @@ function handleDigitWheel(e, digitContainer) {
         isAtMaxLimit = true;
     }
     
-    // If tempo exceeds range, uncheck the limit checkbox
-    if (isLimitIncrement && (newTempo < minTempo || newTempo > maxTempo)) {
-        const limitCheckbox = document.getElementById('limit-increment');
-        if (limitCheckbox) {
-            limitCheckbox.checked = false;
-            isLimitIncrement = false;
-        }
+    // Leaving the min/max range releases the Limit constraint
+    if (newTempo < minTempo || newTempo > maxTempo) {
+        releaseLimitConstraint();
     }
     
     // Apply the new tempo directly

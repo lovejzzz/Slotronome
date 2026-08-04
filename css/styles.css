@@ -1109,6 +1109,27 @@ select {
     transform: translateY(1px);
 }
 
+/* Flashed when the tempo leaves the min/max range and Limit releases itself */
+.limit-checkbox.limit-released {
+    animation: limitReleased 0.9s ease-out;
+}
+
+@keyframes limitReleased {
+    0% {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 3px 0 rgba(0, 0, 0, 0.4);
+    }
+    18%, 62% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.45),
+            0 3px 0 rgba(0, 0, 0, 0.4),
+            0 0 0 3px #fff6d0,
+            0 0 20px var(--amber);
+    }
+    100% {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 3px 0 rgba(0, 0, 0, 0.4);
+    }
+}
+
 .limit-checkbox input[type="checkbox"] {
     position: relative;
     width: 15px;
