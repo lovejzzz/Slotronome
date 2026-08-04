@@ -30,11 +30,6 @@ let dragDistance = 0;
 let tempoChangeThreshold = 8; // Pixels needed to move before changing BPM
 let gearRotationPerBPM = 8; // Degrees to rotate per BPM change
 
-// For digit adjustment
-let selectedDigit = null; // Which digit is being adjusted (hundreds/tens/ones)
-let initialClickY = 0; // Starting Y position for digit adjustment
-let lastClickTime = 0; // For detecting double-clicks
-
 // Add these new variables near the top of the file with other variables
 let isDraggingDigit = false;
 let currentDraggedDigit = null;
@@ -91,6 +86,49 @@ function releaseLimitConstraint() {
     void control.offsetWidth; // restart the animation on repeat releases
     control.classList.add('limit-released');
     setTimeout(() => control.classList.remove('limit-released'), 900);
+}
+
+// Restart the beat timer so a tempo change takes effect on the next click
+// rather than at the end of the current interval.
+function rescheduleTransport() {
+    if (!isPlaying) return;
+    clearInterval(metronomeInterval);
+    metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
+}
+
+// Single funnel for every manual tempo change — reels, gear, lever, steppers,
+// keyboard and the Set BPM dialog all land here. Clamps to the absolute
+// 10-500 range, refreshes the at-limit indicators, releases Limit when the
+// value leaves the user's window, then applies and reschedules.
+//
+// This used to be copy-pasted at seven call sites, which is how the digit-wrap
+// and stranded-indicator bugs managed to exist in two places at once.
+function commitTempo(newTempo) {
+    newTempo = parseInt(newTempo);
+    if (Number.isNaN(newTempo)) return tempo;
+
+    const previousTempo = tempo;
+    const minTempo = parseInt(minTempoInput.value);
+    const maxTempo = parseInt(maxTempoInput.value);
+
+    newTempo = Math.max(10, Math.min(500, newTempo));
+
+    isAtMinLimit = false;
+    isAtMaxLimit = false;
+    if (newTempo <= minTempo && previousTempo > minTempo) {
+        isAtMinLimit = true;
+    } else if (newTempo >= maxTempo && previousTempo < maxTempo) {
+        isAtMaxLimit = true;
+    }
+
+    if (newTempo < minTempo || newTempo > maxTempo) {
+        releaseLimitConstraint();
+    }
+
+    tempo = newTempo;
+    updateTempoDisplay(tempo);
+    rescheduleTransport();
+    return tempo;
 }
 
 // Initialize Audio Context (on user interaction)
@@ -426,42 +464,25 @@ function updateTempoDisplay(newTempo) {
             onesContainer.classList.add('at-limit');
         }, 500); // Delay to allow the roller animation to complete
     }
+
+    // Keep the assistive-tech view of the reels in step with the pixels
+    hundredsContainer.setAttribute('aria-valuenow', hundreds);
+    tensContainer.setAttribute('aria-valuenow', tens);
+    onesContainer.setAttribute('aria-valuenow', ones);
+    hundredsContainer.setAttribute('aria-valuetext', `${newTempo} BPM, hundreds digit ${hundreds}`);
+    tensContainer.setAttribute('aria-valuetext', `${newTempo} BPM, tens digit ${tens}`);
+    onesContainer.setAttribute('aria-valuetext', `${newTempo} BPM, ones digit ${ones}`);
+
+    if (tempoGear) {
+        tempoGear.setAttribute('aria-valuenow', newTempo);
+        tempoGear.setAttribute('aria-valuetext', `${newTempo} BPM`);
+    }
 }
 
-// Set tempo directly without animation
-function setTempoDirectly(newTempo) {
-    // Save previous tempo to check if we're crossing boundaries
-    const previousTempo = tempo;
-    
-    tempo = parseInt(newTempo);
-    tempo = Math.max(10, Math.min(500, tempo)); // Clamp between 10 and 500
-    
-    // Check for min/max for visual indicators
-    const minTempo = parseInt(minTempoInput.value);
-    const maxTempo = parseInt(maxTempoInput.value);
-    
-    // Reset limit flags
-    isAtMinLimit = false;
-    isAtMaxLimit = false;
-    
-    // Show the limit animation only when crossing boundaries
-    if (tempo <= minTempo && previousTempo > minTempo) {
-        isAtMinLimit = true;
-    } else if (tempo >= maxTempo && previousTempo < maxTempo) {
-        isAtMaxLimit = true;
-    }
-    
-    // Leaving the min/max range releases the Limit constraint
-    if (tempo < minTempo || tempo > maxTempo) {
-        releaseLimitConstraint();
-    }
-    
-    updateTempoDisplay(tempo);
-    
-    if (isPlaying) {
-        clearInterval(metronomeInterval);
-        metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-    }
+// Announce something once to screen readers without showing it on screen.
+function announce(message) {
+    const status = document.getElementById('sr-status');
+    if (status) status.textContent = message;
 }
 
 // Enhanced mouse wheel handling for tempo display
@@ -471,8 +492,6 @@ function handleTempoWheel(e) {
     // Determine direction (positive is down/decrease, negative is up/increase)
     const direction = e.deltaY > 0 ? -1 : 1;
     
-    // Save previous tempo to check if we're crossing boundaries
-    const previousTempo = tempo;
     
     // Apply visual feedback based on scroll direction
     if (direction > 0) {
@@ -497,44 +516,11 @@ function handleTempoWheel(e) {
         }
     });
     
-    // Get the min and max tempos for visual indicators only
-    const minTempo = parseInt(minTempoInput.value);
-    const maxTempo = parseInt(maxTempoInput.value);
     
     // Set new tempo with a step of 1, respecting only absolute limits
     let newTempo = tempo + direction;
     
-    // Only enforce the absolute limits
-    if (newTempo < 10) {
-        newTempo = 10;
-    } else if (newTempo > 500) {
-        newTempo = 500;
-    }
-    
-    // Reset limit flags
-    isAtMinLimit = false;
-    isAtMaxLimit = false;
-    
-    // Show the limit animation only when crossing boundaries
-    if (newTempo <= minTempo && previousTempo > minTempo) {
-        isAtMinLimit = true;
-    } else if (newTempo >= maxTempo && previousTempo < maxTempo) {
-        isAtMaxLimit = true;
-    }
-    
-    // Leaving the min/max range releases the Limit constraint
-    if (newTempo < minTempo || newTempo > maxTempo) {
-        releaseLimitConstraint();
-    }
-    
-    // Apply the new tempo directly
-    tempo = newTempo;
-    updateTempoDisplay(tempo);
-    
-    if (isPlaying) {
-        clearInterval(metronomeInterval);
-        metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-    }
+    commitTempo(newTempo);
     
     // Remove scrolling classes after animation completes
     setTimeout(() => {
@@ -543,23 +529,6 @@ function handleTempoWheel(e) {
             container.classList.remove('scrolling', 'scroll-up', 'scroll-down');
         });
     }, 300);
-}
-
-// Handle click on a digit container - now shows the overlay instead of individual adjustment
-function handleDigitClick(e) {
-    e.preventDefault();
-    
-    // Simply show the tempo input overlay
-    showTempoInputOverlay();
-    
-    // No need to determine which specific digit was clicked
-    // or set up drag handlers since we're using the overlay
-}
-
-// Handle double-click on a digit (no longer used, replaced by the overlay)
-function handleDigitDoubleClick(digitContainer) {
-    // Simply use the overlay instead
-    showTempoInputOverlay();
 }
 
 // Update increment value (now can be negative)
@@ -849,39 +818,51 @@ function createAccentButtons() {
     accentButtonsContainer.innerHTML = '';
     
     for (let i = 0; i < timeSignature.numerator; i++) {
-        const button = document.createElement('div');
+        // A real <button>, so it is focusable and Enter/Space work for free
+        const button = document.createElement('button');
+        button.type = 'button';
         button.className = 'accent-button';
-        
-        // Add accent indicator dot
-        const accentDot = document.createElement('div');
+        button.setAttribute('aria-label', `Accent beat ${i + 1}`);
+
+        // Add accent indicator dot (a span — <button> only takes phrasing content)
+        const accentDot = document.createElement('span');
         accentDot.className = 'accent-dot';
         button.appendChild(accentDot);
-        
+
         // Check if this beat should be accented
         if (accentBeats.includes(i)) {
             button.classList.add('accent');
         }
-        
+        button.setAttribute('aria-pressed', String(accentBeats.includes(i)));
+
         // Add click event to toggle accent
         button.addEventListener('click', () => {
-            const beatIndex = i;
-            
-            if (accentBeats.includes(beatIndex)) {
-                // Remove accent
-                accentBeats = accentBeats.filter(b => b !== beatIndex);
-                button.classList.remove('accent');
-            } else {
-                // Add accent
-                accentBeats.push(beatIndex);
-                button.classList.add('accent');
-            }
+            toggleAccent(i);
         });
-        
+
         // Set a data attribute to identify the beat
         button.dataset.beatIndex = i;
-        
+
         accentButtonsContainer.appendChild(button);
     }
+}
+
+// Toggle the accent on one beat, keeping the button's visual and ARIA state
+// together. Shared by clicks, Enter/Space and the number-key shortcuts.
+function toggleAccent(beatIndex) {
+    const button = accentButtonsContainer.querySelector(`.accent-button[data-beat-index="${beatIndex}"]`);
+    if (!button) return;
+
+    const isAccented = accentBeats.includes(beatIndex);
+    if (isAccented) {
+        accentBeats = accentBeats.filter(b => b !== beatIndex);
+    } else {
+        accentBeats.push(beatIndex);
+    }
+
+    button.classList.toggle('accent', !isAccented);
+    button.setAttribute('aria-pressed', String(!isAccented));
+    announce(`Beat ${beatIndex + 1} accent ${!isAccented ? 'on' : 'off'}`);
 }
 
 // Time signature change
@@ -1086,47 +1067,12 @@ function handleGearDrag(e) {
         // Determine direction - moving down (positive deltaY) decreases tempo
         const direction = dragDistance > 0 ? -1 : 1;
         
-        // Save previous tempo to check if we're crossing boundaries
-        const previousTempo = tempo;
         
-        // Get the min and max tempos for visual indicators only
-        const minTempo = parseInt(minTempoInput.value);
-        const maxTempo = parseInt(maxTempoInput.value);
         
         // Apply tempo change
         let newTempo = tempo + direction;
         
-        // Only enforce the absolute limits
-        if (newTempo < 10) {
-            newTempo = 10;
-        } else if (newTempo > 500) {
-            newTempo = 500;
-        }
-        
-        // Reset limit flags
-        isAtMinLimit = false;
-        isAtMaxLimit = false;
-        
-        // Show the limit animation only when crossing boundaries
-        if (newTempo <= minTempo && previousTempo > minTempo) {
-            isAtMinLimit = true;
-        } else if (newTempo >= maxTempo && previousTempo < maxTempo) {
-            isAtMaxLimit = true;
-        }
-        
-        // Leaving the min/max range releases the Limit constraint
-        if (newTempo < minTempo || newTempo > maxTempo) {
-            releaseLimitConstraint();
-        }
-        
-        // Apply the new tempo directly
-        tempo = newTempo;
-        updateTempoDisplay(tempo);
-        
-        if (isPlaying) {
-            clearInterval(metronomeInterval);
-            metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-        }
+        commitTempo(newTempo);
         
         // Reset drag distance after tempo change
         dragDistance = 0;
@@ -1178,43 +1124,15 @@ function hideTempoInputOverlay() {
 
 // Apply the tempo from the direct input
 function applyDirectTempo() {
-    // Save previous tempo to check if we're crossing boundaries
-    const previousTempo = tempo;
     
     let newTempo = parseInt(directTempoInput.value);
     
-    // Get the min/max values for visual indicators only
-    const minTempo = parseInt(minTempoInput.value);
-    const maxTempo = parseInt(maxTempoInput.value);
     
     // Only enforce the absolute limits (10-500)
     // Allow setting beyond min-max range
     newTempo = Math.max(10, Math.min(500, newTempo));
     
-    // Reset limit flags
-    isAtMinLimit = false;
-    isAtMaxLimit = false;
-    
-    // Show the limit animation only when crossing boundaries
-    if (newTempo <= minTempo && previousTempo > minTempo) {
-        isAtMinLimit = true;
-    } else if (newTempo >= maxTempo && previousTempo < maxTempo) {
-        isAtMaxLimit = true;
-    }
-    
-    // Leaving the min/max range releases the Limit constraint
-    if (newTempo < minTempo || newTempo > maxTempo) {
-        releaseLimitConstraint();
-    }
-    
-    // Apply the new tempo without clamping to min/max range
-    tempo = newTempo;
-    updateTempoDisplay(tempo);
-    
-    if (isPlaying) {
-        clearInterval(metronomeInterval);
-        metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-    }
+    commitTempo(newTempo);
     
     // Hide the overlay
     hideTempoInputOverlay();
@@ -1396,7 +1314,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Check if the wheel event occurred on or near the time signature display
         // Get time signature display position
         const timeSignatureRect = timeSignatureDisplay.getBoundingClientRect();
-        const tempoDisplayRect = tempoDisplay.getBoundingClientRect();
         
         // Define a buffer zone around the time signature display (10px on each side)
         const bufferSize = 20;
@@ -1505,39 +1422,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Calculate BPM change (up is increase, down is decrease)
             const direction = dragDistance > 0 ? 1 : -1;
             
-            // Save previous tempo to check if we're crossing boundaries
-            const previousTempo = tempo;
-            
-            // Get the min and max tempos for visual indicators only
-            const minTempo = parseInt(minTempoInput.value);
-            const maxTempo = parseInt(maxTempoInput.value);
             
             // Calculate new tempo
-            let newTempo = tempo + direction;
-            
-            // Only enforce the absolute limits
-            if (newTempo < 10) {
-                newTempo = 10;
-            } else if (newTempo > 500) {
-                newTempo = 500;
-            }
-            
-            // Reset limit flags
-            isAtMinLimit = false;
-            isAtMaxLimit = false;
-            
-            // Show the limit animation only when crossing boundaries
-            if (newTempo <= minTempo && previousTempo > minTempo) {
-                isAtMinLimit = true;
-            } else if (newTempo >= maxTempo && previousTempo < maxTempo) {
-                isAtMaxLimit = true;
-            }
-            
-            // Leaving the min/max range releases the Limit constraint
-            if (newTempo < minTempo || newTempo > maxTempo) {
-                releaseLimitConstraint();
-            }
-            
+            const newTempo = tempo + direction;
+
             // Apply visual feedback based on drag direction
             if (direction > 0) {
                 // Dragging up - increasing tempo
@@ -1559,15 +1447,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             
-            // Apply the new tempo directly
-            tempo = newTempo;
-            updateTempoDisplay(tempo);
-            
-            if (isPlaying) {
-                clearInterval(metronomeInterval);
-                metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-            }
-            
+            commitTempo(newTempo);
+
             // Reset drag accumulator
             dragDistance = 0;
             
@@ -2117,87 +1998,10 @@ function handleDigitDragMove(e) {
     
     // Only change value when dragged enough
     if (Math.abs(deltaY) >= digitDragSensitivity) {
-        // Determine which digit we're adjusting
-        const isHundreds = currentDraggedDigit.querySelector('#hundreds-roller') !== null;
-        const isTens = currentDraggedDigit.querySelector('#tens-roller') !== null;
-        const isOnes = currentDraggedDigit.querySelector('#ones-roller') !== null;
-        
-        // Save previous tempo to check if we're crossing boundaries
-        const previousTempo = tempo;
-        
-        // Direction: positive for up/increase, negative for down/decrease
-        const direction = deltaY > 0 ? 1 : -1;
-        
-        // Calculate new tempo based on which digit is being dragged
-        let newTempo = tempo;
-        
-        // Each place carries into the next like an odometer, so nudging the
-        // tens of 090 up reads 100 rather than rolling the reel back to 000.
-        if (isHundreds) {
-            newTempo = tempo + (direction * 100);
-        } else if (isTens) {
-            newTempo = tempo + (direction * 10);
-        } else if (isOnes) {
-            newTempo = tempo + direction;
-        }
-        
-        // Apply visual feedback based on drag direction
-        if (direction > 0) {
-            // Dragging up - increasing digit
-            currentDraggedDigit.classList.add('scrolling', 'scroll-up');
-            currentDraggedDigit.classList.remove('scroll-down');
-        } else {
-            // Dragging down - decreasing digit
-            currentDraggedDigit.classList.add('scrolling', 'scroll-down');
-            currentDraggedDigit.classList.remove('scroll-up');
-        }
-        
-        // Get the min and max tempos for limit checks
-        const minTempo = parseInt(minTempoInput.value);
-        const maxTempo = parseInt(maxTempoInput.value);
-        
-        // Only enforce the absolute limits
-        if (newTempo < 10) {
-            newTempo = 10;
-        } else if (newTempo > 500) {
-            newTempo = 500;
-        }
-        
-        // Reset limit flags
-        isAtMinLimit = false;
-        isAtMaxLimit = false;
-        
-        // Show the limit animation only when crossing boundaries
-        if (newTempo <= minTempo && previousTempo > minTempo) {
-            isAtMinLimit = true;
-        } else if (newTempo >= maxTempo && previousTempo < maxTempo) {
-            isAtMaxLimit = true;
-        }
-        
-        // Leaving the min/max range releases the Limit constraint
-        if (newTempo < minTempo || newTempo > maxTempo) {
-            releaseLimitConstraint();
-        }
-        
-        // Apply the new tempo directly
-        tempo = newTempo;
-        updateTempoDisplay(tempo);
-        
-        if (isPlaying) {
-            clearInterval(metronomeInterval);
-            metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-        }
-        
+        stepDigit(currentDraggedDigit, deltaY > 0 ? 1 : -1);
+
         // Reset the start position
         digitDragStartY = e.clientY;
-        
-        // Remove scrolling classes after animation completes. Capture the
-        // element now — releasing the drag nulls currentDraggedDigit, and this
-        // callback used to throw and strand the scroll indicator lit.
-        const draggedDigit = currentDraggedDigit;
-        setTimeout(() => {
-            draggedDigit.classList.remove('scrolling', 'scroll-up', 'scroll-down');
-        }, 300);
     }
 }
 
@@ -2269,94 +2073,48 @@ function handleTimeSignatureWheel(e) {
     }, 300);
 }
 
-// Add a new function to handle individual digit wheel events
-function handleDigitWheel(e, digitContainer) {
-    // Determine direction (positive is down/decrease, negative is up/increase)
-    const direction = e.deltaY > 0 ? -1 : 1;
-    
-    // Save previous tempo to check if we're crossing boundaries
-    const previousTempo = tempo;
-    
-    // Determine which digit we're adjusting
-    const isHundreds = digitContainer.querySelector('#hundreds-roller') !== null;
-    const isTens = digitContainer.querySelector('#tens-roller') !== null;
-    const isOnes = digitContainer.querySelector('#ones-roller') !== null;
-    
-    // Apply visual feedback based on scroll direction
-    if (direction > 0) {
-        // Scrolling up - increasing tempo
-        digitContainer.classList.add('scrolling', 'scroll-up');
-        digitContainer.classList.remove('scroll-down');
-    } else {
-        // Scrolling down - decreasing tempo
-        digitContainer.classList.add('scrolling', 'scroll-down');
-        digitContainer.classList.remove('scroll-up');
-    }
-    
-    // Calculate new tempo based on which digit is being scrolled
-    let newTempo = tempo;
-    
-    // Each place carries into the next like an odometer, so nudging the
-    // tens of 090 up reads 100 rather than rolling the reel back to 000.
-    if (isHundreds) {
-        newTempo = tempo + (direction * 100);
-    } else if (isTens) {
-        newTempo = tempo + (direction * 10);
-    } else if (isOnes) {
-        newTempo = tempo + direction;
-    }
-    
-    // Get the min and max tempos for limit checks
-    const minTempo = parseInt(minTempoInput.value);
-    const maxTempo = parseInt(maxTempoInput.value);
-    
-    // Only enforce the absolute limits
-    if (newTempo < 10) {
-        newTempo = 10;
-    } else if (newTempo > 500) {
-        newTempo = 500;
-    }
-    
-    // Reset limit flags
-    isAtMinLimit = false;
-    isAtMaxLimit = false;
-    
-    // Show the limit animation only when crossing boundaries
-    if (newTempo <= minTempo && previousTempo > minTempo) {
-        isAtMinLimit = true;
-    } else if (newTempo >= maxTempo && previousTempo < maxTempo) {
-        isAtMaxLimit = true;
-    }
-    
-    // Leaving the min/max range releases the Limit constraint
-    if (newTempo < minTempo || newTempo > maxTempo) {
-        releaseLimitConstraint();
-    }
-    
-    // Apply the new tempo directly
-    tempo = newTempo;
-    updateTempoDisplay(tempo);
-    
-    if (isPlaying) {
-        clearInterval(metronomeInterval);
-        metronomeInterval = setInterval(scheduleNextBeat, (60 / tempo) * 1000);
-    }
-    
-    // Remove scrolling classes after animation completes
+// How much one notch of a given reel is worth. Each place carries into the
+// next like an odometer, so nudging the tens of 090 up reads 100, not 000.
+function digitPlaceStep(digitContainer) {
+    if (digitContainer.querySelector('#hundreds-roller')) return 100;
+    if (digitContainer.querySelector('#tens-roller')) return 10;
+    if (digitContainer.querySelector('#ones-roller')) return 1;
+    return 0;
+}
+
+// Step one reel and flash its scroll indicator. Shared by the wheel, the drag
+// and the arrow keys so all three stay in step.
+function stepDigit(digitContainer, direction) {
+    const step = digitPlaceStep(digitContainer);
+    if (!step) return;
+
+    digitContainer.classList.add('scrolling');
+    digitContainer.classList.toggle('scroll-up', direction > 0);
+    digitContainer.classList.toggle('scroll-down', direction < 0);
+
+    commitTempo(tempo + direction * step);
+
+    // Capture the element — a drag release nulls currentDraggedDigit before
+    // this fires, which used to throw and strand the indicator lit.
     setTimeout(() => {
         digitContainer.classList.remove('scrolling', 'scroll-up', 'scroll-down');
     }, 300);
-} 
+}
 
-// Add these new functions to handle min/max tempo dragging
+function handleDigitWheel(e, digitContainer) {
+    // deltaY is positive scrolling down, which lowers the tempo
+    stepDigit(digitContainer, e.deltaY > 0 ? -1 : 1);
+}
+
+// Min/max tempo dragging
 
 function handleMinTempoDragStart(e) {
     e.preventDefault();
     e.stopPropagation();
-    
+
     isDraggingMinTempo = true;
     minTempoStartY = e.clientY || (e.touches && e.touches[0].clientY);
-    
+
     // Add visual indicator
     minTempoInput.classList.add('dragging');
 }
@@ -2364,7 +2122,7 @@ function handleMinTempoDragStart(e) {
 function handleMaxTempoDragStart(e) {
     e.preventDefault();
     e.stopPropagation();
-    
+
     isDraggingMaxTempo = true;
     maxTempoStartY = e.clientY || (e.touches && e.touches[0].clientY);
     
@@ -2454,3 +2212,146 @@ function handleMinMaxTempoDragEnd() {
         maxTempoInput.classList.remove('dragging');
     }
 } 
+/* ==========================================================================
+   Keyboard control
+   Everything here is additive: the pointer paths above are untouched, these
+   just give the same actions a keyboard route. Every interactive element now
+   carries a role and is reachable with Tab.
+   ========================================================================== */
+
+// True while the user is typing in a field, so shortcuts stay out of the way.
+function isTypingTarget(el) {
+    if (!el) return false;
+    return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
+        || el.isContentEditable;
+}
+
+function isDialogOpen() {
+    return tempoInputOverlay.classList.contains('active')
+        || timeSignaturePopup.classList.contains('active');
+}
+
+// Enter/Space on an element with role="button"
+function activateOnKey(element, action) {
+    element.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+        e.preventDefault();
+        action();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // --- reels: role="spinbutton" ------------------------------------------
+    document.querySelectorAll('.digit-container').forEach((container) => {
+        container.addEventListener('keydown', (e) => {
+            const step = digitPlaceStep(container);
+            if (!step) return;
+
+            switch (e.key) {
+                case 'ArrowUp':   stepDigit(container, 1); break;
+                case 'ArrowDown': stepDigit(container, -1); break;
+                case 'PageUp':    commitTempo(tempo + step * 5); break;
+                case 'PageDown':  commitTempo(tempo - step * 5); break;
+                case 'Home':      commitTempo(parseInt(minTempoInput.value)); break;
+                case 'End':       commitTempo(parseInt(maxTempoInput.value)); break;
+                case 'Enter':
+                case ' ':         showTempoInputOverlay(); break;
+                default: return;
+            }
+            e.preventDefault();
+            announce(`${tempo} BPM`);
+        });
+    });
+
+    // --- cogwheel: role="slider" -------------------------------------------
+    tempoGear.addEventListener('keydown', (e) => {
+        const nudge = e.shiftKey ? 5 : 1;
+        let target;
+
+        switch (e.key) {
+            case 'ArrowUp':
+            case 'ArrowRight': target = tempo + nudge; break;
+            case 'ArrowDown':
+            case 'ArrowLeft':  target = tempo - nudge; break;
+            case 'PageUp':     target = tempo + 10; break;
+            case 'PageDown':   target = tempo - 10; break;
+            case 'Home':       target = parseInt(minTempoInput.value); break;
+            case 'End':        target = parseInt(maxTempoInput.value); break;
+            default: return;
+        }
+        e.preventDefault();
+
+        const before = tempo;
+        const after = commitTempo(target);
+
+        // Turn the cog by the same amount a drag would, so the pixels agree
+        // with the value the slider is reporting.
+        gearRotation += (after - before) * gearRotationPerBPM;
+        tempoGear.style.transform = `rotate(${gearRotation}deg)`;
+        announce(`${after} BPM`);
+    });
+
+    // --- time signature plate and lever: role="button" ----------------------
+    activateOnKey(timeSignatureDisplay, showTimeSignaturePopup);
+    activateOnKey(slotHandle, pullHandle);
+
+    // --- global shortcuts ---------------------------------------------------
+    document.addEventListener('keydown', (e) => {
+        // Escape always closes whichever dialog is open
+        if (e.key === 'Escape') {
+            if (tempoInputOverlay.classList.contains('active')) {
+                hideTempoInputOverlay();
+                e.preventDefault();
+            } else if (timeSignaturePopup.classList.contains('active')) {
+                hideTimeSignaturePopup();
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if (isDialogOpen() || isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+
+        // Let a focused control handle its own arrows/activation first
+        const onOwnControl = e.target.closest?.('.digit-container, .tempo-gear, .time-sig-display, .slot-handle, .accent-button, button');
+
+        switch (e.key) {
+            case ' ':
+            case 'Spacebar':
+                if (onOwnControl) return;
+                e.preventDefault();
+                if (isPlaying) stopMetronome(); else startMetronome();
+                announce(isPlaying ? 'Playing' : 'Stopped');
+                break;
+
+            case 'l':
+            case 'L':
+                e.preventDefault();
+                pullHandle();
+                break;
+
+            case 'ArrowUp':
+                if (onOwnControl) return;
+                e.preventDefault();
+                commitTempo(tempo + (e.shiftKey ? 5 : 1));
+                announce(`${tempo} BPM`);
+                break;
+
+            case 'ArrowDown':
+                if (onOwnControl) return;
+                e.preventDefault();
+                commitTempo(tempo - (e.shiftKey ? 5 : 1));
+                announce(`${tempo} BPM`);
+                break;
+
+            default:
+                // 1-9 toggle the accent on that beat
+                if (/^[1-9]$/.test(e.key)) {
+                    const beat = parseInt(e.key) - 1;
+                    if (beat < timeSignature.numerator) {
+                        e.preventDefault();
+                        toggleAccent(beat);
+                    }
+                }
+        }
+    });
+});

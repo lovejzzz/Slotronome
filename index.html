@@ -7,9 +7,9 @@
     <meta name="description" content="Slotronome — a pixel-art slot machine metronome that randomises your practice tempo.">
     <title>Slotronome - Musical Slot Machine Metronome</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%232d1e0f'/%3E%3Crect x='2' y='4' width='12' height='8' fill='%23120c06'/%3E%3Crect x='3' y='5' width='3' height='6' fill='%23ffcf4d'/%3E%3Crect x='7' y='5' width='2' height='6' fill='%23ffcf4d'/%3E%3Crect x='10' y='5' width='3' height='6' fill='%23ffcf4d'/%3E%3C/svg%3E">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Fonts are self-hosted in fonts/ and declared in the stylesheet. No
+         rel=preload: it needs crossorigin, which fails when the page is opened
+         straight off disk with file://, and these subsets are only ~20KB. -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -26,11 +26,15 @@
             <div class="cabinet-rivets" aria-hidden="true"></div>
 
             <div class="slot-display">
-                <div class="tempo-display">
+                <div class="tempo-display" role="group" aria-label="Tempo">
                     <!-- Time signature placed on the left side of tempo display -->
-                    <div class="time-sig-display" id="time-sig-display" title="Scroll or drag to change time signature">4/4</div>
+                    <div class="time-sig-display" id="time-sig-display" role="button" tabindex="0"
+                         aria-haspopup="dialog" aria-label="Time signature: 4/4. Activate to change."
+                         title="Click, scroll or drag to change time signature">4/4</div>
                     
-                    <div class="digit-container">
+                    <div class="digit-container" role="spinbutton" tabindex="0"
+                         aria-label="Hundreds digit of tempo" aria-valuemin="10" aria-valuemax="500"
+                         title="Scroll, drag or use arrow keys">
                         <div class="digit-roller" id="hundreds-roller">
                             <div class="digit">0</div>
                             <div class="digit">1</div>
@@ -39,7 +43,9 @@
                         </div>
                         <div class="reel-glass" aria-hidden="true"></div>
                     </div>
-                    <div class="digit-container">
+                    <div class="digit-container" role="spinbutton" tabindex="0"
+                         aria-label="Tens digit of tempo" aria-valuemin="10" aria-valuemax="500"
+                         title="Scroll, drag or use arrow keys">
                         <div class="digit-roller" id="tens-roller">
                             <div class="digit">0</div>
                             <div class="digit">1</div>
@@ -54,7 +60,9 @@
                         </div>
                         <div class="reel-glass" aria-hidden="true"></div>
                     </div>
-                    <div class="digit-container">
+                    <div class="digit-container" role="spinbutton" tabindex="0"
+                         aria-label="Ones digit of tempo" aria-valuemin="10" aria-valuemax="500"
+                         title="Scroll, drag or use arrow keys">
                         <div class="digit-roller" id="ones-roller">
                             <div class="digit">0</div>
                             <div class="digit">1</div>
@@ -74,30 +82,32 @@
 
                     <!-- Add cogwheel control for BPM adjustment -->
                     <div class="tempo-gear-container">
-                        <div class="tempo-gear" id="tempo-gear">
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-tooth"></div>
-                            <div class="gear-center"></div>
+                        <div class="tempo-gear" id="tempo-gear" role="slider" tabindex="0"
+                             aria-label="Tempo fine adjust" aria-valuemin="10" aria-valuemax="500"
+                             title="Drag or use arrow keys to fine-tune the tempo">
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-tooth" aria-hidden="true"></div>
+                            <div class="gear-center" aria-hidden="true"></div>
                         </div>
                     </div>
                 </div>
                 <div class="tempo-input-overlay" id="tempo-input-overlay">
-                    <div class="input-container">
-                        <h3>Set BPM</h3>
+                    <div class="input-container" role="dialog" aria-modal="true" aria-labelledby="set-bpm-heading">
+                        <h3 id="set-bpm-heading">Set BPM</h3>
                         <div class="number-input-large">
                             <button class="minus">-</button>
                             <input type="number" id="direct-tempo-input" min="10" max="500" value="90">
@@ -117,9 +127,11 @@
             
             <div class="slot-handle-container">
                 <div class="handle-mount" aria-hidden="true"></div>
-                <div class="slot-handle" id="slot-handle">
-                    <div class="handle-knob"></div>
-                    <div class="handle-arm"></div>
+                <div class="slot-handle" id="slot-handle" role="button" tabindex="0"
+                     aria-label="Pull the lever to spin a new tempo"
+                     title="Pull, or press L, to spin a new tempo">
+                    <div class="handle-knob" aria-hidden="true"></div>
+                    <div class="handle-arm" aria-hidden="true"></div>
                 </div>
             </div>
             
@@ -142,8 +154,8 @@
                 
                 <!-- Remove time signature from controls and add it as a hidden select for the popup -->
                 <div id="time-signature-popup" class="time-signature-popup">
-                    <div class="ts-panel">
-                        <h3>Time Signature</h3>
+                    <div class="ts-panel" role="dialog" aria-modal="true" aria-labelledby="ts-heading">
+                        <h3 id="ts-heading">Time Signature</h3>
                         <select id="time-signature" class="pixel-select">
                         <!-- Denominator 2 -->
                         <option value="2/2">2/2</option>
@@ -213,10 +225,17 @@
                 <button id="start-stop-btn" class="start">START</button>
             </div>
 
+            <p class="shortcuts">
+                <kbd>Space</kbd> play &middot; <kbd>L</kbd> lever &middot;
+                <kbd>&uarr;</kbd><kbd>&darr;</kbd> tempo &middot; <kbd>1</kbd>&ndash;<kbd>9</kbd> accent
+            </p>
+
             <div class="cabinet-plate" aria-hidden="true">SLOTRONOME &middot; MOD. 4/4</div>
         </div>
     </div>
     
+    <p id="sr-status" class="visually-hidden" role="status" aria-live="polite"></p>
+
     <script src="js/app.js"></script>
 </body>
 </html> 

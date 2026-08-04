@@ -3,6 +3,81 @@
    Visual system: warm oak cabinet, brass trim, amber CRT reels, forest scene
    ========================================================================== */
 
+/* --------------------------------------------------------------------------
+   Fonts — self-hosted so the pixel-art identity survives offline and behind
+   network blockers. Latin + latin-ext subsets only (~60KB total).
+   Press Start 2P and Silkscreen are both SIL OFL 1.1; see fonts/*-OFL.txt.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'Press Start 2P';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/press-start-2p-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+        U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+        U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'Press Start 2P';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/press-start-2p-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+        U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+        U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+        U+A720-A7FF;
+}
+
+@font-face {
+    font-family: 'Silkscreen';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/silkscreen-400-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+        U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+        U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'Silkscreen';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/silkscreen-400-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+        U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+        U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+        U+A720-A7FF;
+}
+
+@font-face {
+    font-family: 'Silkscreen';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/silkscreen-700-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+        U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+        U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'Silkscreen';
+    font-style: normal;
+    font-weight: 700;
+    src: url('../fonts/silkscreen-700-latin-ext.woff2') format('woff2');
+    font-display: swap;
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+        U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+        U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+        U+A720-A7FF;
+}
+
 *,
 *::before,
 *::after {
@@ -1211,6 +1286,12 @@ select {
     position: relative;
     width: 60px;
     height: 84px;
+    padding: 0;
+    border: none;
+    font: inherit;
+    color: inherit;
+    -webkit-appearance: none;
+    appearance: none;
     border-radius: 10px;
     background: linear-gradient(180deg, #7fbcf5 0%, var(--blue) 42%, var(--blue-deep) 100%);
     box-shadow:
@@ -1741,6 +1822,41 @@ select {
     .accent-button::after { left: 9px; top: 39px; width: 21px; height: 15px; }
 }
 
+/* Smallest phones (320px): the display row has ~206px to seat plate, reels
+   and cog without collisions, so everything steps down one more notch. */
+@media (max-width: 360px) {
+    body { padding: 24px 10px 44px; }
+
+    .slot-machine { padding: 20px 44px 16px 8px; }
+    .slot-display { padding: 14px 4px; }
+
+    .digit-container { width: 36px; margin: 0 3px; }
+    .digit { font-size: 18px; }
+
+    .time-sig-display {
+        min-width: 32px;
+        padding: 7px 3px;
+        font-size: 10px;
+    }
+
+    .tempo-gear-container {
+        right: -14px;
+        transform: translateY(-50%) scale(0.36);
+    }
+
+    .slot-handle-container {
+        right: 0;
+        transform: scale(0.52);
+    }
+
+    .accent-button { width: 40px; height: 58px; }
+    .accent-button::before { left: 23px; top: 10px; height: 29px; }
+    .accent-button::after { left: 8px; top: 34px; width: 18px; height: 13px; }
+    .accent-button .accent-dot { top: 4px; width: 9px; height: 9px; }
+
+    #start-stop-btn { padding: 13px 26px; font-size: 12px; }
+}
+
 /* ==========================================================================
    Motion / accessibility preferences
    ========================================================================== */
@@ -1755,7 +1871,84 @@ select {
     }
 }
 
+/* ==========================================================================
+   Keyboard affordances
+   ========================================================================== */
+
 :focus-visible {
     outline: 3px solid var(--amber);
-    outline-offset: 2px;
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+/* The reels clip their contents, so an outline would be cut off — ring them
+   with a shadow instead, matching the hover treatment. */
+.digit-container:focus-visible,
+.time-sig-display:focus-visible {
+    outline: none;
+    box-shadow:
+        inset 0 0 14px rgba(0, 0, 0, 0.95),
+        0 0 0 3px var(--amber),
+        0 0 20px var(--amber-glow);
+}
+
+.tempo-gear:focus-visible {
+    outline: none;
+    filter: brightness(1.15) drop-shadow(0 0 6px var(--amber)) drop-shadow(0 0 14px var(--amber-glow));
+}
+
+.slot-handle:focus-visible {
+    outline: none;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 8px var(--amber));
+}
+
+.accent-button:focus-visible {
+    outline: none;
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.45),
+        0 5px 0 rgba(0, 0, 0, 0.4),
+        0 0 0 3px var(--amber),
+        0 0 20px var(--amber-glow);
+}
+
+/* Shortcut hint strip */
+.shortcuts {
+    margin: 18px auto 0;
+    width: max-content;
+    max-width: 100%;
+    text-align: center;
+    font-size: 10px;
+    line-height: 2;
+    letter-spacing: 1px;
+    color: rgba(255, 236, 200, 0.5);
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+.shortcuts kbd {
+    display: inline-block;
+    min-width: 20px;
+    margin: 0 2px;
+    padding: 3px 6px;
+    font-family: var(--font-display);
+    font-size: 8px;
+    color: #f6e6c4;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0.2));
+    border-radius: 4px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 232, 190, 0.22),
+        0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Screen-reader-only live region */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
