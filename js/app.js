@@ -100,11 +100,46 @@ function releaseLimitConstraint() {
 
 let sfxBusNode = null;
 let sfxNoiseBuffer = null;
+let sfxEnabled = true;
+
+const SFX_STORAGE_KEY = 'slotronome.sfx';
+
+// The metronome click is the point of the app, so this only silences the
+// cabinet noises — lever, reels, blips — never the beat itself.
+function setSfxEnabled(on, { persist = true } = {}) {
+    sfxEnabled = !!on;
+
+    const button = document.getElementById('sfx-toggle');
+    if (button) {
+        button.classList.toggle('muted', !sfxEnabled);
+        button.setAttribute('aria-pressed', String(sfxEnabled));
+        button.setAttribute('aria-label', `Cabinet sound effects ${sfxEnabled ? 'on' : 'off'}`);
+    }
+
+    if (persist) {
+        // Unavailable in some privacy modes and on some file:// origins
+        try {
+            localStorage.setItem(SFX_STORAGE_KEY, sfxEnabled ? 'on' : 'off');
+        } catch {
+            /* preference just won't survive a reload */
+        }
+    }
+}
+
+function loadSfxPreference() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(SFX_STORAGE_KEY);
+    } catch {
+        /* fall through to the default */
+    }
+    setSfxEnabled(stored !== 'off', { persist: false });
+}
 
 // Effects share one bus, kept well under the metronome so the click stays the
 // loudest thing in the room.
 function sfxBus() {
-    if (!audioContext) return null;
+    if (!sfxEnabled || !audioContext) return null;
     if (!sfxBusNode) {
         sfxBusNode = audioContext.createGain();
         sfxBusNode.gain.value = 0.8;
@@ -126,6 +161,7 @@ function sfxNoise() {
 // Every effect is triggered by a user gesture, so it is safe to spin the
 // context up lazily here.
 function sfxReady() {
+    if (!sfxEnabled) return false;
     if (!audioContext) initAudioContext();
     if (!audioContext) return false;
     if (audioContext.state === 'suspended') audioContext.resume();
@@ -208,6 +244,13 @@ function sfxReelStop(index) {
     if (!audioContext) return;
     sfxBurst({ duration: 0.05, gain: 0.3, type: 'lowpass', freq: 900 });
     sfxTone({ freq: [220, 175, 140][index] || 160, endFreq: 60, type: 'triangle', duration: 0.14, gain: 0.22 });
+}
+
+// Played only when switching effects back on, so you hear what you enabled.
+function sfxToggle_confirm() {
+    if (!sfxReady()) return;
+    sfxTone({ freq: 620, duration: 0.06, gain: 0.12 });
+    sfxTone({ freq: 930, duration: 0.09, gain: 0.1, delay: 0.06 });
 }
 
 function sfxTransport(starting) {
@@ -2415,6 +2458,18 @@ function activateOnKey(element, action) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- sound effects toggle ------------------------------------------------
+    loadSfxPreference();
+    const sfxToggle = document.getElementById('sfx-toggle');
+    if (sfxToggle) {
+        sfxToggle.addEventListener('click', () => {
+            setSfxEnabled(!sfxEnabled);
+            // Confirm audibly when switching on; switching off should be silent
+            if (sfxEnabled) sfxToggle_confirm();
+            announce(`Sound effects ${sfxEnabled ? 'on' : 'off'}`);
+        });
+    }
+
     // --- reels: role="spinbutton" ------------------------------------------
     document.querySelectorAll('.digit-container').forEach((container) => {
         container.addEventListener('keydown', (e) => {
@@ -2502,6 +2557,14 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'L':
                 e.preventDefault();
                 pullHandle();
+                break;
+
+            case 'm':
+            case 'M':
+                e.preventDefault();
+                setSfxEnabled(!sfxEnabled);
+                if (sfxEnabled) sfxToggle_confirm();
+                announce(`Sound effects ${sfxEnabled ? 'on' : 'off'}`);
                 break;
 
             case 'ArrowUp':

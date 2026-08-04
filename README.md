@@ -14,7 +14,8 @@ calls at runtime.
   spins up a new tempo from your range. The spin lasts exactly one measure at
   the current tempo and meter, and the reels stop left to right
 - **Synthesised sound effects** — lever ratchet, reel ticks and detent thunks,
-  transport and toggle blips, all generated through the Web Audio API
+  transport and toggle blips, all generated through the Web Audio API, with a
+  mute that leaves the metronome alone
 - **Digit-by-digit tempo control** — scroll, drag or arrow-key any single reel;
   places carry into each other like an odometer, so nudging the tens of `090`
   reads `100`
@@ -76,6 +77,7 @@ Everything on the cabinet is reachable with <kbd>Tab</kbd>.
 | <kbd>L</kbd> | Pull the lever |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Tempo ±1 (<kbd>Shift</kbd> for ±5) |
 | <kbd>1</kbd>–<kbd>9</kbd> | Toggle the accent on that beat |
+| <kbd>M</kbd> | Mute / unmute the cabinet sound effects |
 | <kbd>Esc</kbd> | Close a dialog |
 
 With a control focused:
@@ -108,6 +110,10 @@ a pitched thunk as each reel drops into its detent (descending left to right),
 transport and accent blips, and a chirp when the Limit constraint lets go. They
 run on their own gain bus, mixed under the metronome so the click stays the
 loudest thing in the room. No audio files beyond the two samples.
+
+The **SFX** button next to START (or <kbd>M</kbd>) silences those effects.
+It never touches the metronome — the click is the point of the app — and the
+choice is remembered between sessions.
 
 ## The spin
 
