@@ -105,6 +105,8 @@
                         </div>
                     </div>
                 </div>
+                <div class="modifier-banner" id="modifier-banner" aria-hidden="true"></div>
+
                 <div class="tempo-input-overlay" id="tempo-input-overlay">
                     <div class="input-container" role="dialog" aria-modal="true" aria-labelledby="set-bpm-heading">
                         <h3 id="set-bpm-heading">Set BPM</h3>
@@ -228,6 +230,11 @@
                     <span class="sfx-icon" aria-hidden="true"></span>
                     <span class="sfx-label">SFX</span>
                 </button>
+                <button id="luck-toggle" class="sfx-toggle luck-toggle" type="button"
+                        aria-pressed="true" title="Rare reel symbols and their modifiers">
+                    <span class="luck-icon" aria-hidden="true"></span>
+                    <span class="sfx-label">LUCK</span>
+                </button>
             </div>
 
             <p class="shortcuts">
@@ -236,7 +243,11 @@
                 <kbd>M</kbd> sfx
             </p>
 
-            <div class="cabinet-plate" aria-hidden="true">SLOTRONOME &middot; MOD. 4/4</div>
+            <div class="cabinet-plate">
+                <span class="plate-name" aria-hidden="true">SLOTRONOME</span>
+                <span class="collection-strip" id="collection-strip"
+                      role="group" aria-label="Symbols found"></span>
+            </div>
         </div>
     </div>
     

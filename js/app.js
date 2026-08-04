@@ -253,6 +253,15 @@ function sfxToggle_confirm() {
     sfxTone({ freq: 930, duration: 0.09, gain: 0.1, delay: 0.06 });
 }
 
+// A symbol landing: a bright arpeggio over the detent thunk.
+function sfxSymbolHit() {
+    if (!sfxReady()) return;
+    sfxBurst({ duration: 0.06, gain: 0.28, type: 'lowpass', freq: 1100 });
+    [660, 880, 1320].forEach((freq, i) => {
+        sfxTone({ freq, type: 'triangle', duration: 0.13, gain: 0.14, delay: 0.05 + i * 0.075 });
+    });
+}
+
 function sfxTransport(starting) {
     if (!sfxReady()) return;
     if (starting) {
@@ -274,6 +283,284 @@ function sfxToggle(on) {
 function sfxLimitRelease() {
     if (!audioContext) return;
     sfxTone({ freq: 880, endFreq: 420, type: 'triangle', duration: 0.16, gain: 0.11 });
+}
+
+/* ==========================================================================
+   Reel symbols and modifiers
+
+   A pull very occasionally lands a symbol instead of a digit. The symbol holds
+   for a moment, the reel nudges on to reveal the real digit, and the symbol's
+   modifier runs for a few bars before reverting itself.
+
+   Every modifier is a practice technique rather than an arbitrary effect — if a
+   teacher wouldn't ask you to do it, it doesn't belong on the strip. The tempo
+   is still chosen before the spin starts, so none of this can corrupt the
+   metronome; the symbol is theatre plus a trigger.
+   ========================================================================== */
+
+const SYMBOL_SLOT_HOLD_MS = 1000;   // how long a landed symbol sits before the nudge
+const SYMBOL_CHANCE = 1 / 12;       // per lever pull, before the cooldown
+let symbolCooldown = 0;             // pulls remaining before another can land
+let modifiersEnabled = true;
+let activeModifier = null;
+
+const MODIFIERS_STORAGE_KEY = 'slotronome.modifiers';
+const COLLECTION_STORAGE_KEY = 'slotronome.collection';
+
+const REEL_SYMBOLS = [
+    {
+        id: 'cherry',
+        name: 'Cherry',
+        blurb: 'Half time for 2 bars',
+        weight: 38,
+        bars: 2,
+        apply() {
+            // Whichever direction there is room for; halving is the more useful
+            // drill, so prefer it unless the tempo is already crawling.
+            const halved = tempo >= 80;
+            const previous = tempo;
+            const next = Math.max(10, Math.min(500, halved ? Math.round(tempo / 2) : tempo * 2));
+            this.blurb = halved ? 'Half time for 2 bars' : 'Double time for 2 bars';
+            applyTempoQuietly(next);
+            return () => applyTempoQuietly(previous);
+        }
+    },
+    {
+        id: 'bell',
+        name: 'Bell',
+        blurb: 'Accent moves for 8 bars',
+        weight: 25,
+        bars: 8,
+        apply() {
+            const previous = [...accentBeats];
+            const choices = [];
+            for (let i = 1; i < timeSignature.numerator; i++) choices.push(i);
+            if (!choices.length) return () => {};
+            accentBeats = [choices[Math.floor(Math.random() * choices.length)]];
+            refreshAccentButtons();
+            return () => { accentBeats = previous; refreshAccentButtons(); };
+        }
+    },
+    {
+        id: 'bar',
+        name: 'Bar',
+        blurb: 'Silent bar — keep time',
+        weight: 18,
+        bars: 1,
+        blackout: true,
+        apply() { return () => {}; }
+    },
+    {
+        id: 'seven',
+        name: 'Seven',
+        blurb: 'Seven eight for 4 bars',
+        weight: 11,
+        bars: 4,
+        apply() {
+            const previous = { ...timeSignature };
+            const previousAccents = [...accentBeats];
+            timeSignature = { numerator: 7, denominator: 8 };
+            accentBeats = [0];
+            currentBeat = 0;
+            createAccentButtons();
+            updateTimeSignatureDisplay();
+            return () => {
+                timeSignature = previous;
+                accentBeats = previousAccents;
+                currentBeat = 0;
+                createAccentButtons();
+                updateTimeSignatureDisplay();
+            };
+        }
+    },
+    {
+        id: 'diamond',
+        name: 'Diamond',
+        blurb: 'Two bars, no sound, no lights',
+        weight: 8,
+        bars: 2,
+        blackout: true,
+        lightsOut: true,
+        apply() { return () => {}; }
+    }
+];
+
+// Pixel-flavoured sprites, drawn in currentColor so they pick up the reels'
+// amber glow. crispEdges keeps them from going soft against the digits.
+const SYMBOL_ART = {
+    cherry: '<svg viewBox="0 0 24 24" shape-rendering="crispEdges"><path d="M12 3h2v2h-2zM14 5h2v2h-2zM16 7h2v2h-2zM10 5h-2v2h2zM8 7h-2v2h2z" fill="currentColor"/><circle cx="6" cy="16" r="4.5" fill="currentColor"/><circle cx="17" cy="17" r="4" fill="currentColor"/><path d="M13 2h5v2h-5z" fill="currentColor"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" shape-rendering="crispEdges"><path d="M11 2h2v2h-2zM9 4h6v2H9zM7 6h10v8H7zM5 14h14v3H5zM10 18h4v3h-4z" fill="currentColor"/></svg>',
+    bar: '<svg viewBox="0 0 40 24" shape-rendering="crispEdges"><rect x="1" y="4" width="38" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2.5"/><text x="20" y="17" text-anchor="middle" font-size="10" fill="currentColor" font-family="inherit">BAR</text></svg>',
+    seven: '<svg viewBox="0 0 24 30" shape-rendering="crispEdges"><text x="12" y="12" text-anchor="middle" font-size="12" fill="currentColor" font-family="inherit">7</text><rect x="3" y="14" width="18" height="2" fill="currentColor"/><text x="12" y="28" text-anchor="middle" font-size="12" fill="currentColor" font-family="inherit">8</text></svg>',
+    diamond: '<svg viewBox="0 0 24 24" shape-rendering="crispEdges"><path d="M12 1 23 12 12 23 1 12z" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M12 6 18 12 12 18 6 12z" fill="currentColor"/></svg>'
+};
+
+function randomSymbol() {
+    const total = REEL_SYMBOLS.reduce((sum, symbol) => sum + symbol.weight, 0);
+    let roll = Math.random() * total;
+    for (const symbol of REEL_SYMBOLS) {
+        roll -= symbol.weight;
+        if (roll <= 0) return symbol;
+    }
+    return REEL_SYMBOLS[0];
+}
+
+function setReelSymbol(roller, symbol) {
+    const slot = roller.querySelector('.digit-symbol');
+    if (!slot) return;
+    slot.innerHTML = SYMBOL_ART[symbol.id] || '';
+    slot.dataset.symbol = symbol.id;
+}
+
+// Change the tempo without touching the at-limit flags or releasing Limit — a
+// modifier is a temporary detour, not the user setting a new tempo.
+function applyTempoQuietly(next) {
+    tempo = Math.max(10, Math.min(500, next));
+    updateTempoDisplay(tempo);
+    rescheduleTransport();
+}
+
+function refreshAccentButtons() {
+    document.querySelectorAll('.accent-button').forEach(button => {
+        const index = parseInt(button.dataset.beatIndex);
+        const on = accentBeats.includes(index);
+        button.classList.toggle('accent', on);
+        button.setAttribute('aria-pressed', String(on));
+    });
+}
+
+/* --- running a modifier -------------------------------------------------- */
+
+function startModifier(symbol) {
+    if (activeModifier) endModifier();
+
+    const revert = symbol.apply();
+    activeModifier = {
+        symbol,
+        barsLeft: symbol.bars,
+        blackout: !!symbol.blackout,
+        lightsOut: !!symbol.lightsOut,
+        revert
+    };
+
+    document.body.classList.add('modifier-active');
+    document.body.classList.toggle('modifier-blackout', !!symbol.blackout);
+    showModifierBanner(symbol);
+    announce(`${symbol.name}. ${symbol.blurb}`);
+}
+
+function endModifier() {
+    if (!activeModifier) return;
+    try {
+        activeModifier.revert();
+    } finally {
+        activeModifier = null;
+        document.body.classList.remove('modifier-active', 'modifier-blackout');
+    }
+}
+
+// Called once per completed bar from the scheduler.
+function tickModifier() {
+    if (!activeModifier) return;
+    activeModifier.barsLeft--;
+    if (activeModifier.barsLeft <= 0) endModifier();
+}
+
+function showModifierBanner(symbol) {
+    const banner = document.getElementById('modifier-banner');
+    if (!banner) return;
+    banner.innerHTML =
+        `<span class="modifier-mark">${SYMBOL_ART[symbol.id] || ''}</span>` +
+        `<span class="modifier-text"><strong>${symbol.name}</strong>${symbol.blurb}</span>`;
+    banner.classList.add('visible');
+    clearTimeout(showModifierBanner.timer);
+    showModifierBanner.timer = setTimeout(() => banner.classList.remove('visible'), 2600);
+}
+
+/* --- the collection plate ------------------------------------------------- */
+
+function loadCollection() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(COLLECTION_STORAGE_KEY) || '[]'));
+    } catch {
+        return new Set();
+    }
+}
+
+function recordSymbolFound(symbol) {
+    const found = loadCollection();
+    const isNew = !found.has(symbol.id);
+    found.add(symbol.id);
+    try {
+        localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify([...found]));
+    } catch {
+        /* the plate just won't persist */
+    }
+    renderCollection();
+    if (isNew) {
+        const slot = document.querySelector(`.collection-slot[data-symbol="${symbol.id}"]`);
+        if (slot) {
+            slot.classList.add('just-found');
+            setTimeout(() => slot.classList.remove('just-found'), 2000);
+        }
+    }
+    return isNew;
+}
+
+function renderCollection() {
+    const strip = document.getElementById('collection-strip');
+    if (!strip) return;
+    const found = loadCollection();
+    strip.innerHTML = REEL_SYMBOLS.map(symbol =>
+        `<span class="collection-slot${found.has(symbol.id) ? ' found' : ''}" data-symbol="${symbol.id}" ` +
+        `title="${found.has(symbol.id) ? symbol.name + ' — ' + symbol.blurb : 'Not yet found'}" ` +
+        `aria-label="${symbol.name}: ${found.has(symbol.id) ? 'found' : 'not yet found'}">${SYMBOL_ART[symbol.id]}</span>`
+    ).join('');
+}
+
+/* --- the modifiers toggle -------------------------------------------------- */
+
+function setModifiersEnabled(on, { persist = true } = {}) {
+    modifiersEnabled = !!on;
+
+    const button = document.getElementById('luck-toggle');
+    if (button) {
+        button.classList.toggle('muted', !modifiersEnabled);
+        button.setAttribute('aria-pressed', String(modifiersEnabled));
+        button.setAttribute('aria-label', `Reel symbols ${modifiersEnabled ? 'on' : 'off'}`);
+    }
+    if (!modifiersEnabled) endModifier();
+
+    if (persist) {
+        try {
+            localStorage.setItem(MODIFIERS_STORAGE_KEY, modifiersEnabled ? 'on' : 'off');
+        } catch {
+            /* preference just won't survive a reload */
+        }
+    }
+}
+
+function loadModifiersPreference() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(MODIFIERS_STORAGE_KEY);
+    } catch {
+        /* fall through to the default */
+    }
+    setModifiersEnabled(stored !== 'off', { persist: false });
+}
+
+// Decide whether this pull lands a symbol, and on which reel.
+function rollForSymbol() {
+    if (!modifiersEnabled) return null;
+    if (symbolCooldown > 0) {
+        symbolCooldown--;
+        return null;
+    }
+    if (Math.random() >= SYMBOL_CHANCE) return null;
+
+    symbolCooldown = 1;   // never twice running; scarcity is the whole point
+    return { symbol: randomSymbol(), reelIndex: Math.floor(Math.random() * 3) };
 }
 
 // Restart the beat timer so a tempo change takes effect on the next click
@@ -512,28 +799,35 @@ function playClick(time, isAccent) {
 function scheduleNextBeat() {
     const beatTime = audioContext.currentTime;
     const isAccent = accentBeats.includes(currentBeat);
-    
-    // Play the click
-    playClick(beatTime, isAccent);
-    
+
+    // A blackout modifier keeps the beat running but silences it — the whole
+    // point is that you carry the pulse yourself for a bar.
+    if (!activeModifier || !activeModifier.blackout) {
+        playClick(beatTime, isAccent);
+    }
+
     // Update visual indicators - first reset all accent buttons from active state
     document.querySelectorAll('.accent-button').forEach(button => {
         button.classList.remove('active');
     });
-    
-    // Activate current beat's button
-    const currentBeatButton = document.querySelector(`.accent-button[data-beat-index="${currentBeat}"]`);
-    if (currentBeatButton) {
-        currentBeatButton.classList.add('active');
+
+    // Diamond takes the beat lights away too, so there is nothing left to
+    // follow. Every other modifier leaves them as a crutch.
+    if (!activeModifier || !activeModifier.lightsOut) {
+        const currentBeatButton = document.querySelector(`.accent-button[data-beat-index="${currentBeat}"]`);
+        if (currentBeatButton) {
+            currentBeatButton.classList.add('active');
+        }
     }
-    
+
     // Advance to next beat
     currentBeat = (currentBeat + 1) % timeSignature.numerator;
-    
+
     // If we've completed a bar
     if (currentBeat === 0) {
         currentBar++;
-        
+        tickModifier();
+
         // Check if we need to change tempo (only if barsToChange > 0)
         if (barsToChange > 0 && currentBar % barsToChange === 0) {
             changeMetronomeTempo();
@@ -773,6 +1067,8 @@ function startMetronome() {
 
 // Stop the metronome
 function stopMetronome() {
+    endModifier();
+
     if (isPlaying) {
         isPlaying = false;
         clearInterval(metronomeInterval);
@@ -911,12 +1207,69 @@ function spinRollers(onComplete) {
     }
     
     // Hand the reels to the animator; it lands them on `tempo` and calls back
-    // when the last one stops.
-    animateReels(tempo, onComplete);
+    // when the last one stops. A symbol landing, if one is due, resolves
+    // before the callback fires.
+    animateReels(tempo, onComplete, rollForSymbol());
+}
+
+// A symbol has landed. Hold it long enough to register, fire the modifier,
+// then nudge the reel on to the digit it was always going to show. The tempo
+// was decided before the spin, so this is purely the reveal catching up.
+function resolveSymbolLanding(reel, landing, onComplete, token) {
+    const symbol = landing.symbol;
+
+    reel.roller.parentElement.classList.add('symbol-hit');
+    sfxSymbolHit();
+
+    symbolHoldTimer = setTimeout(() => {
+        symbolHoldTimer = null;
+        if (token !== spinToken) return;   // a newer pull took over mid-hold
+
+        const loop = reel.loop;
+        const from = parseInt(reel.roller.dataset.symbolIndex) * DIGIT_HEIGHT;
+        // Forward to the real digit, wrapping through the strip rather than
+        // rewinding — a reel only ever turns one way.
+        const distance = (((reel.target * DIGIT_HEIGHT) - from) % loop + loop) % loop;
+        const nudgeMs = 260 + distance * 0.45;
+
+        reel.roller.classList.add('spinning');
+        const startedAt = performance.now();
+
+        const step = (now) => {
+            if (token !== spinToken) return;
+            const progress = Math.min(1, (now - startedAt) / nudgeMs);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const position = (from + distance * eased) % loop;
+            reel.roller.style.transform = `translateY(${-position}px)`;
+
+            if (progress < 1) {
+                reelSpinFrame = requestAnimationFrame(step);
+                return;
+            }
+
+            reelSpinFrame = null;
+            reel.roller.classList.remove('spinning');
+            reel.roller.parentElement.classList.remove('symbol-hit');
+            sfxReelStop(2);
+            updateTempoDisplay(tempo);
+
+            // Only now announce the prize — during the nudge the banner would
+            // have been sitting on top of the reveal it exists to celebrate.
+            startModifier(symbol);
+            recordSymbolFound(symbol);
+            if (onComplete) onComplete();
+        };
+
+        reelSpinFrame = requestAnimationFrame(step);
+    }, SYMBOL_SLOT_HOLD_MS);
 }
 
 const DIGIT_HEIGHT = 80;   // must match .digit height in the stylesheet
 let reelSpinFrame = null;
+let symbolHoldTimer = null;
+// Bumped on every spin. A symbol hold outlives the spin that started it, so
+// anything scheduled across that gap has to check it is still the current one.
+let spinToken = 0;
 
 // Where a reel currently sits, as a positive scroll offset in pixels.
 function currentReelOffset(roller) {
@@ -938,8 +1291,12 @@ function currentReelOffset(roller) {
 // Now each reel turns one way only, decelerates into its detent, and they stop
 // left to right. The whole spin lasts one measure, which is what the original
 // brief asked for.
-function animateReels(finalTempo, onComplete) {
+function animateReels(finalTempo, onComplete, landing = null) {
     if (reelSpinFrame) cancelAnimationFrame(reelSpinFrame);
+    if (symbolHoldTimer) clearTimeout(symbolHoldTimer);
+    document.querySelectorAll('.digit-container.symbol-hit')
+        .forEach(el => el.classList.remove('symbol-hit'));
+    const token = ++spinToken;
 
     // One bar at the *incoming* tempo. Clamped so a very slow or very fast
     // setting still feels like a slot machine rather than a stall or a blink.
@@ -951,15 +1308,26 @@ function animateReels(finalTempo, onComplete) {
         { roller: tensRoller, target: Math.floor((finalTempo % 100) / 10) },
         { roller: onesRoller, target: finalTempo % 10 }
     ].map((reel, i) => {
-        const count = parseInt(reel.roller.dataset.digitCount) || reel.roller.children.length;
-        const loop = count * DIGIT_HEIGHT;
+        // The loop spans digits + the symbol slot; the trailing face repeats slot 0
+        const slots = parseInt(reel.roller.dataset.loopSlots) || reel.roller.children.length - 1;
+        const loop = slots * DIGIT_HEIGHT;
         const start = currentReelOffset(reel.roller);
+
+        // A symbol landing parks this reel on the symbol slot instead of its
+        // digit; the digit is revealed afterwards by the nudge.
+        const landsSymbol = !!landing && landing.reelIndex === i;
+        if (landsSymbol) setReelSymbol(reel.roller, landing.symbol);
+        const stopSlot = landsSymbol
+            ? parseInt(reel.roller.dataset.symbolIndex)
+            : reel.target;
+
         // Distance still to travel once whole revolutions are accounted for
-        const remainder = (((reel.target * DIGIT_HEIGHT) - start) % loop + loop) % loop;
+        const remainder = (((stopSlot * DIGIT_HEIGHT) - start) % loop + loop) % loop;
         return {
             ...reel,
             loop,
             start,
+            landsSymbol,
             stopAt: duration * [0.62, 0.82, 1][i],
             total: (2 + i) * loop + remainder,
             travelled: start,
@@ -1021,6 +1389,13 @@ function animateReels(finalTempo, onComplete) {
             reel.roller.classList.remove('spinning');
             reel.roller.style.filter = '';
         });
+
+        const symbolReel = reels.find(reel => reel.landsSymbol);
+        if (symbolReel && landing) {
+            resolveSymbolLanding(symbolReel, landing, onComplete, token);
+            return;
+        }
+
         // Settle on the live tempo rather than the value captured when the
         // spin began — an auto-change can land on a bar boundary mid-spin, and
         // the reels should agree with the metronome, not with stale input.
@@ -2165,29 +2540,54 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Generate all digits for the rollers
+// Build the reel strips. This is called from inside the DOMContentLoaded
+// handler, so it must run now — it used to register a *second* DOMContentLoaded
+// listener from within the first, which never fired. The reels were therefore
+// stuck with the placeholder faces in index.html, where the hundreds strip only
+// goes up to 3: anything from 400 BPM displayed a blank window.
 function generateDigits() {
-    // Only call once the DOM is fully loaded
-    document.addEventListener('DOMContentLoaded', () => {
-        // Hundreds only ever reaches 5 (500 BPM ceiling); tens and ones are 0-9
-        buildReel(hundredsRoller, 6);
-        buildReel(tensRoller, 10);
-        buildReel(onesRoller, 10);
-    });
+    // Hundreds only ever reaches 5 (500 BPM ceiling); tens and ones are 0-9
+    buildReel(hundredsRoller, 6);
+    buildReel(tensRoller, 10);
+    buildReel(onesRoller, 10);
+    updateTempoDisplay(tempo);
 }
 
-// Fill one reel with its digits, plus a repeat of the first digit at the
-// bottom. That duplicate is what makes the spin loop seamlessly: the strip can
-// scroll past the last digit into an identical copy of the first before
-// wrapping back to the top, instead of dragging a blank gap through the window.
+// Fill one reel: its digits, then a symbol slot, then a repeat of the first
+// digit. The strip reads [0..9][symbol][0].
+//
+// The trailing duplicate is what makes the spin loop seamlessly — the strip can
+// scroll past the last slot into an identical copy of the first before wrapping,
+// instead of dragging a blank gap through the window.
+//
+// The symbol sits *after* the digits, so updateTempoDisplay's -(digit * 80)
+// arithmetic is untouched and no ordinary tempo change can ever land on it.
+// Only a deliberate spin target can stop there — but the symbol still whirs
+// past on every pull, which is how you learn the reels have more than numbers.
 function buildReel(roller, count) {
     roller.innerHTML = '';
-    for (let i = 0; i <= count; i++) {
+
+    for (let i = 0; i < count; i++) {
         const digit = document.createElement('div');
         digit.className = 'digit';
-        digit.textContent = i % count;
+        digit.textContent = i;
         roller.appendChild(digit);
     }
-    roller.dataset.digitCount = count;
+
+    const symbol = document.createElement('div');
+    symbol.className = 'digit digit-symbol';
+    roller.appendChild(symbol);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'digit';
+    wrap.textContent = '0';
+    roller.appendChild(wrap);
+
+    roller.dataset.digitCount = count;      // digit faces only
+    roller.dataset.symbolIndex = count;     // where the symbol slot sits
+    roller.dataset.loopSlots = count + 1;   // digits + symbol; the wrap face repeats slot 0
+
+    setReelSymbol(roller, randomSymbol());
 }
 
 // Add this new function to handle individual digit dragging
@@ -2458,8 +2858,19 @@ function activateOnKey(element, action) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- sound effects toggle ------------------------------------------------
+    // --- sound effects + symbols toggles --------------------------------------
     loadSfxPreference();
+    loadModifiersPreference();
+    renderCollection();
+
+    const luckToggle = document.getElementById('luck-toggle');
+    if (luckToggle) {
+        luckToggle.addEventListener('click', () => {
+            setModifiersEnabled(!modifiersEnabled);
+            sfxToggle(modifiersEnabled);
+            announce(`Reel symbols ${modifiersEnabled ? 'on' : 'off'}`);
+        });
+    }
     const sfxToggle = document.getElementById('sfx-toggle');
     if (sfxToggle) {
         sfxToggle.addEventListener('click', () => {

@@ -2057,3 +2057,198 @@ select {
     white-space: nowrap;
     border: 0;
 }
+
+/* ==========================================================================
+   Reel symbols, modifiers and the collection plate
+   ========================================================================== */
+
+/* A symbol face on a reel strip. Sized to sit inside the 80px slot. */
+.digit-symbol {
+    color: var(--amber);
+    filter: drop-shadow(0 0 4px rgba(255, 207, 77, 0.9))
+            drop-shadow(0 0 14px var(--amber-glow));
+}
+
+.digit-symbol svg {
+    width: 40px;
+    height: 40px;
+    display: block;
+}
+
+/* The BAR and 7/8 faces are wider than they are tall */
+.digit-symbol[data-symbol="bar"] svg { width: 48px; height: 29px; }
+.digit-symbol[data-symbol="seven"] svg { width: 30px; height: 38px; }
+
+/* The reel that caught a symbol, while it holds before the nudge */
+.digit-container.symbol-hit {
+    animation: symbolHit 0.6s ease-out 2;
+    z-index: 6;
+}
+
+@keyframes symbolHit {
+    0%, 100% {
+        box-shadow:
+            inset 0 0 14px rgba(0, 0, 0, 0.95),
+            0 0 0 2px var(--brass-low),
+            0 0 0 3px rgba(0, 0, 0, 0.6);
+    }
+    45% {
+        box-shadow:
+            inset 0 0 14px rgba(0, 0, 0, 0.6),
+            0 0 0 2px var(--brass-hi),
+            0 0 0 3px rgba(0, 0, 0, 0.6),
+            0 0 26px var(--amber),
+            0 0 52px var(--amber-glow);
+    }
+}
+
+/* Banner announcing what just landed */
+.modifier-banner {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 14px);
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    white-space: nowrap;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(20, 12, 4, 0.96), rgba(8, 5, 2, 0.96));
+    box-shadow:
+        0 0 0 2px var(--brass),
+        0 0 0 3px rgba(0, 0, 0, 0.7),
+        0 8px 24px rgba(0, 0, 0, 0.7),
+        0 0 34px rgba(255, 168, 40, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -8px) scale(0.92);
+    transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0.25s;
+    pointer-events: none;
+}
+
+.modifier-banner.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0) scale(1);
+}
+
+.modifier-mark {
+    display: block;
+    width: 30px;
+    height: 30px;
+    color: var(--amber);
+    flex: none;
+}
+
+.modifier-mark svg { width: 100%; height: 100%; display: block; }
+
+.modifier-text {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: rgba(255, 236, 200, 0.78);
+}
+
+.modifier-text strong {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    color: var(--amber);
+    text-shadow: 0 0 10px var(--amber-glow);
+}
+
+/* While a blackout modifier runs, the glass dims — you can see the machine is
+   deliberately withholding rather than broken. */
+body.modifier-blackout .slot-display {
+    box-shadow:
+        inset 0 0 34px rgba(0, 0, 0, 0.9),
+        inset 0 2px 0 rgba(0, 0, 0, 0.8),
+        0 0 0 3px var(--brass-low),
+        0 0 0 4px rgba(0, 0, 0, 0.4),
+        0 8px 20px rgba(0, 0, 0, 0.55);
+}
+
+body.modifier-blackout .digit,
+body.modifier-blackout .time-sig-display {
+    filter: brightness(0.45) saturate(0.7);
+    transition: filter 0.3s ease;
+}
+
+/* --- LUCK toggle (shares the SFX button's chrome) ------------------------- */
+
+.luck-icon {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    flex: none;
+}
+
+.luck-icon::before {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    background: currentColor;
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.luck-toggle.muted .luck-icon::before {
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%, 50% 0, 50% 14%, 14% 50%, 50% 86%, 86% 50%, 50% 14%);
+}
+
+/* --- Maker's plate, now carrying the collection --------------------------- */
+
+.cabinet-plate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.plate-name {
+    font-size: 9px;
+    letter-spacing: 3px;
+}
+
+.collection-strip {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+}
+
+/* Unfound symbols are etched but unlit — you can see what is still out there */
+.collection-slot {
+    display: block;
+    width: 15px;
+    height: 15px;
+    color: rgba(255, 226, 170, 0.16);
+    transition: color 0.4s ease, filter 0.4s ease, transform 0.3s ease;
+}
+
+.collection-slot svg { width: 100%; height: 100%; display: block; }
+
+.collection-slot.found {
+    color: var(--brass);
+    filter: drop-shadow(0 0 5px rgba(255, 200, 90, 0.55));
+}
+
+.collection-slot.just-found {
+    animation: symbolFound 0.7s ease-out 3;
+}
+
+@keyframes symbolFound {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px rgba(255, 200, 90, 0.55)); }
+    45% { transform: scale(1.45); filter: drop-shadow(0 0 12px var(--amber)) drop-shadow(0 0 22px var(--amber-glow)); }
+}
+
+@media (max-width: 460px) {
+    .digit-symbol svg { width: 30px; height: 30px; }
+    .digit-symbol[data-symbol="bar"] svg { width: 36px; height: 22px; }
+    .digit-symbol[data-symbol="seven"] svg { width: 22px; height: 28px; }
+    .modifier-banner { padding: 8px 12px; gap: 8px; }
+    .modifier-text { font-size: 9px; }
+}

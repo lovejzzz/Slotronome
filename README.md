@@ -28,6 +28,9 @@ calls at runtime.
   accented by default
 - **Auto-changing tempo** — re-deal every *n* bars, either randomly or by adding
   a fixed increment
+- **Rare reel symbols** — roughly one pull in twelve lands a symbol instead of
+  a digit, granting a short practice modifier; each one you find lights up
+  permanently on the cabinet plate
 - **Limit toggle** — keeps incremental changes inside your min/max window
 - **Fully keyboard operable**, with visible focus and screen-reader labels
 
@@ -66,6 +69,30 @@ Set **Change Every** to a number of bars, then pick a **Change Type**:
 that window by any other means releases the constraint automatically — the
 checkbox flashes when this happens — and ticking it again pulls the tempo back
 into range.
+
+## Symbols
+
+Every reel strip carries one symbol slot among its digits. Most pulls it just
+whirs past — about one in twelve it lands, holds for a beat while the machine
+lets you see it, then the reel nudges on to reveal the digit it was always
+going to show. It never lands twice in a row.
+
+| Symbol | Modifier | Why |
+| --- | --- | --- |
+| Cherry | Half time for 2 bars | The common one, and the gentlest |
+| Bell | Accent moves to another beat for 8 bars | Gets you off the crutch of beat 1 |
+| Bar | One silent bar, then it returns | The classic test of whether you're keeping time or following it |
+| Seven | 7/8 for 4 bars | Odd meter, dropped on you without warning |
+| Diamond | Two bars with no sound *and* no beat lights | The rarest, and the only one that takes the visual reference away too |
+
+Every modifier is a real practice technique, reverts itself, and stops when you
+stop the metronome. The tempo is chosen before the reels ever move, so a symbol
+can't corrupt it — the landing is theatre plus a trigger.
+
+The first time you land each one it lights up on the maker's plate at the foot
+of the cabinet and stays lit. There's no score and no streak; the plate just
+slowly fills in. The **LUCK** button turns the whole thing off if you'd rather
+have a plain metronome.
 
 ## Keyboard
 
@@ -111,6 +138,8 @@ transport and accent blips, and a chirp when the Limit constraint lets go. They
 run on their own gain bus, mixed under the metronome so the click stays the
 loudest thing in the room. No audio files beyond the two samples.
 
+A symbol landing gets its own bright arpeggio over the detent thunk.
+
 The **SFX** button next to START (or <kbd>M</kbd>) silences those effects.
 It never touches the metronome — the click is the point of the app — and the
 choice is remembered between sessions.
@@ -124,8 +153,9 @@ reel turns one way only, decelerates into its detent on an ease-out curve, and
 blurs in proportion to its speed. The reels stop in sequence at roughly 62%,
 82% and 100% of the measure.
 
-Each strip carries a repeat of its first digit at the bottom, which is what lets
-the loop wrap without dragging a blank gap through the window.
+Each strip runs `[0..9][symbol][0]` — the trailing repeat is what lets the loop
+wrap without dragging a blank gap through the window, and the symbol sits past
+the digits so ordinary tempo changes can never land on it.
 
 ## Design
 
