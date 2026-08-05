@@ -303,6 +303,8 @@ const SYMBOL_CHANCE = 1 / 12;       // per lever pull, before the cooldown
 let symbolCooldown = 0;             // pulls remaining before another can land
 let modifiersEnabled = true;
 let activeModifier = null;
+let beatButtons = [];      // cached per meter; the beat path must not query the DOM
+let litBeatButton = null;
 
 const MODIFIERS_STORAGE_KEY = 'slotronome.modifiers';
 const COLLECTION_STORAGE_KEY = 'slotronome.collection';
@@ -311,6 +313,7 @@ const REEL_SYMBOLS = [
     {
         id: 'cherry',
         name: 'Cherry',
+        owns: 'tempo',
         blurb: 'Half time for 2 bars',
         weight: 38,
         bars: 2,
@@ -328,6 +331,7 @@ const REEL_SYMBOLS = [
     {
         id: 'bell',
         name: 'Bell',
+        owns: 'accents',
         blurb: 'Accent moves for 8 bars',
         weight: 25,
         bars: 8,
@@ -353,6 +357,7 @@ const REEL_SYMBOLS = [
     {
         id: 'seven',
         name: 'Seven',
+        owns: 'meter',
         blurb: 'Seven eight for 4 bars',
         weight: 11,
         bars: 4,
@@ -457,6 +462,15 @@ function endModifier() {
         activeModifier = null;
         document.body.classList.remove('modifier-active', 'modifier-blackout');
     }
+}
+
+// If the user changes the thing a modifier had taken over, their intent wins:
+// the modifier steps aside *without* restoring its snapshot, which would
+// otherwise quietly undo what they just did a few bars later.
+function releaseModifierOwning(domain) {
+    if (!activeModifier || activeModifier.symbol.owns !== domain) return;
+    activeModifier = null;
+    document.body.classList.remove('modifier-active', 'modifier-blackout');
 }
 
 // Called once per completed bar from the scheduler.
@@ -579,6 +593,8 @@ function rescheduleTransport() {
 // This used to be copy-pasted at seven call sites, which is how the digit-wrap
 // and stranded-indicator bugs managed to exist in two places at once.
 function commitTempo(newTempo) {
+    releaseModifierOwning('tempo');
+
     newTempo = parseInt(newTempo);
     if (Number.isNaN(newTempo)) return tempo;
 
@@ -797,6 +813,10 @@ function playClick(time, isAccent) {
 
 // Schedule the next beat
 function scheduleNextBeat() {
+    // Guard the invariant at the point of use, so no future path can sound a
+    // beat index that no longer exists in the current meter.
+    if (currentBeat >= timeSignature.numerator) currentBeat = 0;
+
     const beatTime = audioContext.currentTime;
     const isAccent = accentBeats.includes(currentBeat);
 
@@ -806,17 +826,21 @@ function scheduleNextBeat() {
         playClick(beatTime, isAccent);
     }
 
-    // Update visual indicators - first reset all accent buttons from active state
-    document.querySelectorAll('.accent-button').forEach(button => {
-        button.classList.remove('active');
-    });
+    // Move the light on. This used to querySelectorAll every accent button and
+    // clear them all on every single beat, which is real main-thread work at
+    // fast tempos — and this callback is what the click's timing rides on.
+    if (litBeatButton) {
+        litBeatButton.classList.remove('active');
+        litBeatButton = null;
+    }
 
     // Diamond takes the beat lights away too, so there is nothing left to
     // follow. Every other modifier leaves them as a crutch.
     if (!activeModifier || !activeModifier.lightsOut) {
-        const currentBeatButton = document.querySelector(`.accent-button[data-beat-index="${currentBeat}"]`);
+        const currentBeatButton = beatButtons[currentBeat];
         if (currentBeatButton) {
             currentBeatButton.classList.add('active');
+            litBeatButton = currentBeatButton;
         }
     }
 
@@ -837,6 +861,7 @@ function scheduleNextBeat() {
 
 // Change the metronome tempo based on settings
 function changeMetronomeTempo() {
+    releaseModifierOwning('tempo');
     const minTempo = parseInt(minTempoInput.value);
     const maxTempo = parseInt(maxTempoInput.value);
     
@@ -1051,6 +1076,7 @@ function startMetronome() {
         document.querySelectorAll('.accent-button').forEach(button => {
             button.classList.remove('active');
         });
+        litBeatButton = null;
         
         // Schedule first beat immediately
         scheduleNextBeat();
@@ -1077,6 +1103,7 @@ function stopMetronome() {
         document.querySelectorAll('.accent-button').forEach(button => {
             button.classList.remove('active');
         });
+        litBeatButton = null;
         
         // Update UI
         startStopBtn.textContent = 'START';
@@ -1439,11 +1466,15 @@ function createAccentButtons() {
 
         accentButtonsContainer.appendChild(button);
     }
+
+    beatButtons = [...accentButtonsContainer.querySelectorAll('.accent-button')];
+    litBeatButton = null;
 }
 
 // Toggle the accent on one beat, keeping the button's visual and ARIA state
 // together. Shared by clicks, Enter/Space and the number-key shortcuts.
 function toggleAccent(beatIndex) {
+    releaseModifierOwning('accents');
     const button = accentButtonsContainer.querySelector(`.accent-button[data-beat-index="${beatIndex}"]`);
     if (!button) return;
 
@@ -1462,6 +1493,7 @@ function toggleAccent(beatIndex) {
 
 // Time signature change
 function handleTimeSignatureChange() {
+    releaseModifierOwning('meter');
     // Get the selected value which now should be a string like "4/4"
     const selectedValue = timeSignatureSelect.value;
     const [numerator, denominator] = selectedValue.split('/').map(num => parseInt(num));
@@ -1478,10 +1510,12 @@ function handleTimeSignatureChange() {
         
         // Update time signature display
         updateTimeSignatureDisplay();
-        
+
+        // Always restart the bar. Doing this only while playing left currentBeat
+        // pointing past the end of a shorter bar once the meter shrank.
+        currentBeat = 0;
+
         if (isPlaying) {
-            currentBeat = 0; // Reset current beat
-            
             // If time signature changed while playing, we need to reset the interval
             // to account for potential changes in beat duration
             clearInterval(metronomeInterval);
@@ -2871,9 +2905,11 @@ document.addEventListener('DOMContentLoaded', () => {
             announce(`Reel symbols ${modifiersEnabled ? 'on' : 'off'}`);
         });
     }
-    const sfxToggle = document.getElementById('sfx-toggle');
-    if (sfxToggle) {
-        sfxToggle.addEventListener('click', () => {
+    // Named sfxButton, not sfxToggle — a const of that name here would shadow the
+    // sfxToggle() effect function for everything else in this scope.
+    const sfxButton = document.getElementById('sfx-toggle');
+    if (sfxButton) {
+        sfxButton.addEventListener('click', () => {
             setSfxEnabled(!sfxEnabled);
             // Confirm audibly when switching on; switching off should be silent
             if (sfxEnabled) sfxToggle_confirm();
