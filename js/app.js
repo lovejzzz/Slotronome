@@ -286,6 +286,154 @@ function sfxLimitRelease() {
 }
 
 /* ==========================================================================
+   Tap-along timing
+
+   The app cannot hear your instrument, but it can hear a key. Tapping the
+   pulse turns the metronome from something you follow into something you are
+   measured against — and it is what makes a blackout bar worth landing, since
+   the beats keep being scored while the click is silent.
+   ========================================================================== */
+
+const TAP_PERFECT_MS = 20;      // inside this reads as dead on
+const TAP_GOOD_MS = 45;         // outside this breaks the streak
+const TAP_WINDOW = 16;          // taps averaged for the running accuracy
+const STREAK_STORAGE_KEY = 'slotronome.beststreak';
+
+let lastBeatAt = 0;             // performance.now() of the most recent click
+let tapErrors = [];
+let tapStreak = 0;
+let tapBestStreak = 0;
+
+function loadBestStreak() {
+    try {
+        tapBestStreak = parseInt(localStorage.getItem(STREAK_STORAGE_KEY)) || 0;
+    } catch {
+        tapBestStreak = 0;
+    }
+    renderTapStats();
+}
+
+function resetTapScoring() {
+    tapErrors = [];
+    tapStreak = 0;
+    const verdict = document.getElementById('tap-verdict');
+    if (verdict) {
+        verdict.textContent = 'Tap along to score your time';
+        verdict.className = 'tap-verdict';
+    }
+    setTapNeedle(null);
+    renderTapStats();
+}
+
+// Signed error to the nearest beat, in ms. Negative is early, positive late.
+// Derived from the last click plus the beat period, so it stays correct
+// between beats and through a silent bar.
+function tapErrorMs(at) {
+    if (!lastBeatAt) return null;
+    const period = 60000 / Math.max(tempo, 1);
+    let delta = (at - lastBeatAt) % period;
+    if (delta < 0) delta += period;
+    return delta > period / 2 ? delta - period : delta;
+}
+
+function registerTap() {
+    const pad = document.getElementById('tap-pad');
+    if (pad) {
+        pad.classList.remove('hit');
+        void pad.offsetWidth;
+        pad.classList.add('hit');
+        setTimeout(() => pad.classList.remove('hit'), 220);
+    }
+
+    const verdict = document.getElementById('tap-verdict');
+    if (!isPlaying || !lastBeatAt) {
+        if (verdict) {
+            verdict.textContent = 'Start the metronome first';
+            verdict.className = 'tap-verdict idle';
+        }
+        return;
+    }
+
+    const error = tapErrorMs(performance.now());
+    if (error === null) return;
+
+    const magnitude = Math.abs(error);
+    tapErrors.push(magnitude);
+    if (tapErrors.length > TAP_WINDOW) tapErrors.shift();
+
+    let grade, label;
+    if (magnitude <= TAP_PERFECT_MS) {
+        grade = 'perfect';
+        label = 'Spot on';
+        tapStreak++;
+    } else if (magnitude <= TAP_GOOD_MS) {
+        grade = 'good';
+        label = `${Math.round(magnitude)}ms ${error < 0 ? 'early' : 'late'}`;
+        tapStreak++;
+    } else {
+        grade = 'off';
+        label = `${Math.round(magnitude)}ms ${error < 0 ? 'early' : 'late'}`;
+        tapStreak = 0;
+    }
+
+    if (tapStreak > tapBestStreak) {
+        tapBestStreak = tapStreak;
+        try {
+            localStorage.setItem(STREAK_STORAGE_KEY, String(tapBestStreak));
+        } catch {
+            /* the best just won't persist */
+        }
+    }
+
+    if (verdict) {
+        verdict.textContent = label;
+        verdict.className = `tap-verdict ${grade}`;
+    }
+    setTapNeedle(error);
+    renderTapStats();
+    sfxTap(grade);
+}
+
+// Nudge the little needle left of centre for early, right for late.
+function setTapNeedle(error) {
+    const needle = document.getElementById('tap-needle');
+    if (!needle) return;
+    if (error === null) {
+        needle.style.left = '50%';
+        needle.classList.remove('live');
+        return;
+    }
+    const period = 60000 / Math.max(tempo, 1);
+    const half = Math.min(period / 2, 120);          // full scale, capped
+    const ratio = Math.max(-1, Math.min(1, error / half));
+    // Offset via `left`, not translateX: a percentage in translateX resolves
+    // against the needle's own 6px width, so it barely moved.
+    needle.style.left = `calc(50% + ${(ratio * 45).toFixed(1)}%)`;
+    needle.classList.add('live');
+}
+
+function renderTapStats() {
+    const stats = document.getElementById('tap-stats');
+    if (!stats) return;
+    const parts = [];
+    if (tapErrors.length) {
+        const mean = tapErrors.reduce((a, c) => a + c, 0) / tapErrors.length;
+        parts.push(`±${Math.round(mean)}ms over ${tapErrors.length}`);
+    }
+    if (tapStreak) parts.push(`streak ${tapStreak}`);
+    if (tapBestStreak) parts.push(`best ${tapBestStreak}`);
+    stats.textContent = parts.join('   ·   ');
+}
+
+// Pitched by accuracy, so you can hear how you did without reading anything.
+function sfxTap(grade) {
+    if (!sfxReady()) return;
+    const freq = grade === 'perfect' ? 1320 : grade === 'good' ? 880 : 440;
+    sfxTone({ freq, type: 'triangle', duration: 0.06, gain: 0.1 });
+    sfxBurst({ duration: 0.015, gain: 0.08, type: 'highpass', freq: 4000 });
+}
+
+/* ==========================================================================
    Reel symbols and modifiers
 
    A pull very occasionally lands a symbol instead of a digit. The symbol holds
@@ -299,7 +447,7 @@ function sfxLimitRelease() {
    ========================================================================== */
 
 const SYMBOL_SLOT_HOLD_MS = 1000;   // how long a landed symbol sits before the nudge
-const SYMBOL_CHANCE = 1 / 12;       // per lever pull, before the cooldown
+const SYMBOL_CHANCE = 1 / 5;        // per lever pull, before the cooldown
 let symbolCooldown = 0;             // pulls remaining before another can land
 let modifiersEnabled = true;
 let activeModifier = null;
@@ -818,6 +966,7 @@ function scheduleNextBeat() {
     if (currentBeat >= timeSignature.numerator) currentBeat = 0;
 
     const beatTime = audioContext.currentTime;
+    lastBeatAt = performance.now();
     const isAccent = accentBeats.includes(currentBeat);
 
     // A blackout modifier keeps the beat running but silences it — the whole
@@ -1046,6 +1195,7 @@ function updateIncrementValue() {
 // Start the metronome
 function startMetronome() {
     if (!isPlaying) {
+        resetTapScoring();
         console.log('Starting metronome...');
         
         // Initialize context if needed
@@ -1093,7 +1243,9 @@ function startMetronome() {
 
 // Stop the metronome
 function stopMetronome() {
+    cancelPendingSpin();
     endModifier();
+    lastBeatAt = 0;
 
     if (isPlaying) {
         isPlaying = false;
@@ -1237,6 +1389,28 @@ function spinRollers(onComplete) {
     // when the last one stops. A symbol landing, if one is due, resolves
     // before the callback fires.
     animateReels(tempo, onComplete, rollForSymbol());
+}
+
+// Abandon any spin or symbol reveal still in flight and settle the reels on the
+// current tempo. Without this, a symbol resolving after the user stopped would
+// start a modifier with no beats left to expire it.
+function cancelPendingSpin() {
+    spinToken++;
+    if (symbolHoldTimer) {
+        clearTimeout(symbolHoldTimer);
+        symbolHoldTimer = null;
+    }
+    if (reelSpinFrame) {
+        cancelAnimationFrame(reelSpinFrame);
+        reelSpinFrame = null;
+    }
+    document.querySelectorAll('.digit-roller.spinning').forEach(el => {
+        el.classList.remove('spinning');
+        el.style.filter = '';
+    });
+    document.querySelectorAll('.digit-container.symbol-hit')
+        .forEach(el => el.classList.remove('symbol-hit'));
+    updateTempoDisplay(tempo);
 }
 
 // A symbol has landed. Hold it long enough to register, fire the modifier,
@@ -2897,6 +3071,17 @@ document.addEventListener('DOMContentLoaded', () => {
     loadModifiersPreference();
     renderCollection();
 
+    loadBestStreak();
+    const tapPad = document.getElementById('tap-pad');
+    if (tapPad) {
+        // pointerdown, not click — a click fires on release and would add the
+        // press duration to every measurement.
+        tapPad.addEventListener('pointerdown', (e) => { e.preventDefault(); registerTap(); });
+        tapPad.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); registerTap(); }
+        });
+    }
+
     const luckToggle = document.getElementById('luck-toggle');
     if (luckToggle) {
         luckToggle.addEventListener('click', () => {
@@ -3004,6 +3189,12 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'L':
                 e.preventDefault();
                 pullHandle();
+                break;
+
+            case 't':
+            case 'T':
+                e.preventDefault();
+                registerTap();
                 break;
 
             case 'm':

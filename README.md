@@ -28,10 +28,12 @@ calls at runtime.
   accented by default
 - **Auto-changing tempo** — re-deal every *n* bars, either randomly or by adding
   a fixed increment
-- **Rare reel symbols** — roughly one pull in twelve lands a symbol instead of
+- **Rare reel symbols** — roughly one pull in five lands a symbol instead of
   a digit, granting a short practice modifier; each one you find lights up
   permanently on the cabinet plate
 - **Limit toggle** — keeps incremental changes inside your min/max window
+- **Tap-along scoring** — tap the pulse and it tells you how far off you were,
+  with a running average and a streak; it keeps scoring through a silent bar
 - **Fully keyboard operable**, with visible focus and screen-reader labels
 
 ## Using it
@@ -70,10 +72,29 @@ that window by any other means releases the constraint automatically — the
 checkbox flashes when this happens — and ticking it again pulls the tempo back
 into range.
 
+## Tapping along
+
+The app can't hear your instrument, but it can hear a key. Hit **TAP** — the pad
+next to START, or <kbd>T</kbd> — on each beat and it measures how far off you
+were:
+
+- within 20ms reads as **spot on**
+- within 45ms shows the miss in milliseconds and keeps your streak alive
+- anything wider breaks the streak
+
+The needle sits left for early and right for late, and the readout carries a
+running average over your last 16 taps plus your best streak, which is saved
+between sessions.
+
+The point of it is the silent bar. Beats keep advancing and keep being scored
+while the click is muted, so landing a **Bar** or a **Diamond** turns into an
+actual test: tap through the silence and see whether you held the pulse or
+drifted.
+
 ## Symbols
 
 Every reel strip carries one symbol slot among its digits. Most pulls it just
-whirs past — about one in twelve it lands, holds for a beat while the machine
+whirs past — about one pull in five it lands, holds for a beat while the machine
 lets you see it, then the reel nudges on to reveal the digit it was always
 going to show. It never lands twice in a row.
 
@@ -104,6 +125,7 @@ Everything on the cabinet is reachable with <kbd>Tab</kbd>.
 | <kbd>L</kbd> | Pull the lever |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Tempo ±1 (<kbd>Shift</kbd> for ±5) |
 | <kbd>1</kbd>–<kbd>9</kbd> | Toggle the accent on that beat |
+| <kbd>T</kbd> | Tap the pulse (or hit the TAP pad) |
 | <kbd>M</kbd> | Mute / unmute the cabinet sound effects |
 | <kbd>Esc</kbd> | Close a dialog |
 

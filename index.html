@@ -223,6 +223,15 @@
                 <div id="accent-buttons" class="quarter-notes-container"></div>
             </div>
 
+            <div class="timing-panel">
+                <span class="panel-caption">Timing</span>
+                <div class="timing-readout">
+                    <span class="tap-verdict" id="tap-verdict" role="status" aria-live="polite">Tap along to score your time</span>
+                    <span class="tap-meter" aria-hidden="true"><span class="tap-needle" id="tap-needle"></span></span>
+                    <span class="tap-stats" id="tap-stats"></span>
+                </div>
+            </div>
+
             <div class="playback-controls">
                 <button id="start-stop-btn" class="start">START</button>
                 <button id="sfx-toggle" class="sfx-toggle" type="button"
@@ -235,12 +244,14 @@
                     <span class="luck-icon" aria-hidden="true"></span>
                     <span class="sfx-label">LUCK</span>
                 </button>
+                <button id="tap-pad" class="tap-pad" type="button"
+                        title="Tap the pulse to score your timing (T)">TAP</button>
             </div>
 
             <p class="shortcuts">
                 <kbd>Space</kbd> play &middot; <kbd>L</kbd> lever &middot;
                 <kbd>&uarr;</kbd><kbd>&darr;</kbd> tempo &middot; <kbd>1</kbd>&ndash;<kbd>9</kbd> accent &middot;
-                <kbd>M</kbd> sfx
+                <kbd>M</kbd> sfx &middot; <kbd>T</kbd> tap
             </p>
 
             <div class="cabinet-plate">
