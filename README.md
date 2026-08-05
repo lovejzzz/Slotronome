@@ -201,6 +201,27 @@ To serve it locally instead:
 python3 -m http.server 8000    # then visit http://localhost:8000
 ```
 
+## Tests
+
+```sh
+npm install          # playwright, for the test runner only
+npm test             # the fast suites, about two minutes
+npm run test:all     # adds the soak and timing suites
+npm run test:headed  # watch it happen in a real window
+node test/run.js tempo reels    # just the named suites
+```
+
+The runner serves the repo and drives it in Chromium. It covers every tempo
+route, the reel strips and spin animation, symbol landings and their modifiers,
+tap scoring, and a click of every control on the cabinet — plus, under
+`--slow`, a randomised soak that checks invariants after 400 arbitrary actions
+and a timing-accuracy measurement.
+
+Most of these exist because they caught something: reels wobbling instead of
+turning, digits wrapping instead of carrying, the hundreds reel going blank
+above 400 BPM, a modifier quietly undoing a tempo you had set yourself, a
+button that threw the first time anyone clicked it.
+
 ## Project layout
 
 ```
@@ -209,6 +230,7 @@ css/styles.css      the entire visual system, including @font-face
 js/app.js           metronome scheduling, input handling, keyboard layer
 fonts/              self-hosted woff2 subsets + their licences
 Audio/              BassDrum.mp3, Snare.wav
+test/               runner + suites (dev only; the app ships with no deps)
 ```
 
 ## Fonts
@@ -219,6 +241,25 @@ offline, behind network blockers, and with no third-party request at runtime.
 
 Both are licensed under the [SIL Open Font License 1.1](https://scripts.sil.org/OFL);
 the full licence text for each ships in `fonts/`.
+
+## Timing
+
+Beats are placed on the AudioContext clock ahead of time rather than played the
+instant a timer fires. A `setInterval` runs late whenever the main thread is
+busy, and that lateness used to go straight into the audio.
+
+Measured with the main thread deliberately blocked for 45ms out of every 110ms —
+roughly what a busy page does to you:
+
+| | beats more than 5ms off | worst | cumulative drift |
+| --- | --- | --- | --- |
+| timer-driven | 21 of 24 | 50ms | 40ms |
+| audio clock | 0 of 24 | under 1ms | none |
+
+The scheduler looks 120ms ahead on a 25ms tick, and beat lights are driven from
+a queue on `requestAnimationFrame` so the pixels follow the audio rather than
+the scheduler. Stopping cancels anything already placed, so the transport goes
+quiet immediately instead of letting the lookahead window drain.
 
 ## Browser support
 
