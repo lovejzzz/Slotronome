@@ -884,9 +884,7 @@ function commitTempo(newTempo) {
 function initAudioContext() {
     if (!audioContext) {
         try {
-            console.log('Creating new audio context');
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            console.log('Audio context created with state:', audioContext.state);
             // Load audio samples
             loadAudioSamples();
             return true;
@@ -895,55 +893,35 @@ function initAudioContext() {
             return false;
         }
     } else {
-        console.log('Audio context already exists with state:', audioContext.state);
         return true;
-    }
-}
-
-// Function to manually force reload audio samples
-function forceReloadAudioSamples() {
-    console.log('Forcing reload of audio samples...');
-    
-    // Reset loaded flag
-    audioSamplesLoaded = false;
-    bassDrumBuffer = null;
-    snareBuffer = null;
-    
-    // Ensure audio context is initialized and resumed
-    if (!audioContext) {
-        const initialized = initAudioContext();
-        if (!initialized) {
-            console.error('Could not initialize audio context for reload');
-            return;
-        }
-    }
-    
-    // Make sure context is running
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-            console.log('Audio context resumed for forced reload');
-            loadAudioSamples();
-        });
-    } else {
-        loadAudioSamples();
     }
 }
 
 // Load audio samples for the metronome
 function loadAudioSamples() {
     if (audioSamplesLoaded) {
-        console.log('Audio samples already loaded, skipping');
         return;
     }
-    
-    console.log('Attempting to load audio samples...');
-    
+
+    // fetch() refuses the file: scheme, so opening index.html straight off disk
+    // cannot load the drum samples. Everything else works and playClick already
+    // falls back to a synthesised click, so degrade on purpose with one line
+    // rather than letting six failed fetches pile up in the console.
+    if (window.location.protocol === 'file:') {
+        if (!loadAudioSamples.warnedAboutFile) {
+            loadAudioSamples.warnedAboutFile = true;
+            console.info(
+                'Slotronome: drum samples need to be served over http — opened from disk, ' +
+                'so the metronome will use its synthesised click. Run a local server for the samples.'
+            );
+        }
+        return;
+    }
+
     // Reset the audio samples loaded flag to ensure both samples are loaded
     audioSamplesLoaded = false;
     
     // Log what we're looking for
-    console.log('Fetching from: ' + new URL('./Audio/BassDrum.mp3', window.location.href).href);
-    console.log('Fetching from: ' + new URL('./Audio/Snare.wav', window.location.href).href);
     
     // Create promises for loading both samples
     const loadBassDrum = fetch('./Audio/BassDrum.mp3')
@@ -952,15 +930,12 @@ function loadAudioSamples() {
                 console.error(`Failed to load BassDrum.mp3: ${response.status} ${response.statusText}`);
                 throw new Error(`Failed to load BassDrum.mp3: ${response.status} ${response.statusText}`);
             }
-            console.log('BassDrum.mp3 fetch successful');
             return response.arrayBuffer();
         })
         .then(arrayBuffer => {
-            console.log('BassDrum.mp3 buffer received, size:', arrayBuffer.byteLength);
             return audioContext.decodeAudioData(arrayBuffer);
         })
         .then(audioBuffer => {
-            console.log('BassDrum.mp3 decoded successfully');
             bassDrumBuffer = audioBuffer;
             return true;
         })
@@ -975,15 +950,12 @@ function loadAudioSamples() {
                 console.error(`Failed to load Snare.wav: ${response.status} ${response.statusText}`);
                 throw new Error(`Failed to load Snare.wav: ${response.status} ${response.statusText}`);
             }
-            console.log('Snare.wav fetch successful');
             return response.arrayBuffer();
         })
         .then(arrayBuffer => {
-            console.log('Snare.wav buffer received, size:', arrayBuffer.byteLength);
             return audioContext.decodeAudioData(arrayBuffer);
         })
         .then(audioBuffer => {
-            console.log('Snare.wav decoded successfully');
             snareBuffer = audioBuffer;
             return true;
         })
@@ -997,9 +969,6 @@ function loadAudioSamples() {
         .then(results => {
             // Both samples loaded successfully if both results are true
             audioSamplesLoaded = results[0] && results[1];
-            console.log('Audio samples loaded status:', audioSamplesLoaded);
-            console.log('BassDrum buffer:', bassDrumBuffer ? 'LOADED' : 'NULL');
-            console.log('Snare buffer:', snareBuffer ? 'LOADED' : 'NULL');
             
             if (!audioSamplesLoaded) {
                 console.warn('Some audio samples failed to load, will use fallback sounds');
@@ -1011,7 +980,6 @@ function loadAudioSamples() {
 function playClick(time, isAccent) {
     // Ensure audio context is running
     if (audioContext.state !== 'running') {
-        console.log('Audio context not running, attempting to resume');
         audioContext.resume();
     }
     
@@ -1304,26 +1272,20 @@ function updateIncrementValue() {
 function startMetronome() {
     if (!isPlaying) {
         resetTapScoring();
-        console.log('Starting metronome...');
         
         // Initialize context if needed
         initAudioContext();
         
         // Resume audio context (might be suspended)
         if (audioContext.state === 'suspended') {
-            console.log('Audio context is suspended, resuming...');
             audioContext.resume().then(() => {
-                console.log('Audio context resumed successfully');
                 // Make sure samples are loaded - might have failed the first time
                 if (!audioSamplesLoaded) {
-                    console.log('Audio samples not loaded, attempting to load now...');
                     loadAudioSamples();
                 }
             }).catch(error => {
                 console.error('Failed to resume audio context:', error);
             });
-        } else {
-            console.log('Audio context state:', audioContext.state);
         }
         
         isPlaying = true;
@@ -1979,9 +1941,7 @@ function handleGearDrag(e) {
     if (Math.abs(dragDistance) >= tempoChangeThreshold) {
         // Determine direction - moving down (positive deltaY) decreases tempo
         const direction = dragDistance > 0 ? -1 : 1;
-        
-        
-        
+
         // Apply tempo change
         let newTempo = tempo + direction;
         
@@ -2059,17 +2019,14 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTimeSignatureDisplay(); // Initialize time signature display
     
     // Add debug message
-    console.log('Slotronome loaded - ready to initialize audio');
     
     // Add a one-time click handler to initialize audio on first interaction
     const initAudioOnFirstInteraction = () => {
-        console.log('First user interaction detected - initializing audio');
         initAudioContext();
         
         // Try to resume audio context immediately (needed for some browsers)
         if (audioContext && audioContext.state === 'suspended') {
             audioContext.resume().then(() => {
-                console.log('Audio context resumed on first interaction');
                 loadAudioSamples(); // Try loading samples right away
             });
         }
@@ -2088,7 +2045,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.checkAudioFiles = function() {
         fetch('./Audio/BassDrum.mp3')
             .then(response => {
-                console.log('BassDrum.mp3 fetch status:', response.status, response.statusText);
                 return response.ok;
             })
             .catch(err => {
@@ -2098,7 +2054,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
         fetch('./Audio/Snare.wav')
             .then(response => {
-                console.log('Snare.wav fetch status:', response.status, response.statusText);
                 return response.ok;
             })
             .catch(err => {
@@ -2106,15 +2061,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return false;
             });
     };
-    
-    // Log audio context state when available
-    function logAudioState() {
-        if (audioContext) {
-            console.log('Audio context state:', audioContext.state);
-        } else {
-            console.log('Audio context not yet initialized');
-        }
-    }
     
     // Check audio state on first user interaction
     document.body.addEventListener('click', function checkAudio() {

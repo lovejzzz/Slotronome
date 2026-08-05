@@ -1,0 +1,36 @@
+Slotronome
+==========
+
+Copyright (c) the Slotronome authors.
+
+This project is available for educational and personal use.
+
+These are the terms the project has always stated in its README; this file
+exists so they sit where tooling and contributors look for them. If you want
+Slotronome under a standard open-source licence instead — MIT, Apache-2.0 or
+similar — that is a decision for the copyright holder, and this file should be
+replaced with the full text of whichever is chosen.
+
+
+Bundled fonts
+-------------
+
+The typefaces in fonts/ are not covered by the terms above. Both are licensed
+under the SIL Open Font License, Version 1.1, and each ships with its full
+licence text:
+
+  Press Start 2P    Copyright 2012 The Press Start 2P Project Authors
+                    fonts/PressStart2P-OFL.txt
+
+  Silkscreen        Copyright 2001 The Silkscreen Project Authors
+                    fonts/Silkscreen-OFL.txt
+
+The OFL permits redistribution of the fonts, bundled with software, provided
+the licence and copyright notice accompany them — which is why those files are
+included. The fonts are not sold on their own and have not been modified.
+
+
+Audio samples
+-------------
+
+Audio/BassDrum.mp3 and Audio/Snare.wav are included with the project.

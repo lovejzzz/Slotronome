@@ -192,14 +192,15 @@ being hidden — both are controls, not decoration.
 
 ## Running it
 
-Open `index.html` in a browser. That's the whole story — it works straight off
-disk over `file://`, no server needed.
-
-To serve it locally instead:
-
 ```sh
 python3 -m http.server 8000    # then visit http://localhost:8000
 ```
+
+Opening `index.html` straight off disk works too, with one caveat: browsers
+refuse `fetch()` on `file:` URLs, so the two drum samples cannot load and the
+metronome falls back to its synthesised click. Everything else — the reels, the
+fonts, the symbols, tap scoring, the timing — is identical. Serve it over http
+if you want the drums.
 
 ## Tests
 
